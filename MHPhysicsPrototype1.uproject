@@ -1,0 +1,16 @@
+{
+	"FileVersion": 3,
+	"EngineAssociation": "{3B5A791F-4D1D-C7BC-6FC0-698AE97B2F86}",
+	"Category": "",
+	"Description": "",
+	"Modules": [
+		{
+			"Name": "MHPhysicsPrototype1",
+			"Type": "Runtime",
+			"LoadingPhase": "Default",
+			"AdditionalDependencies": [
+				"Engine"
+			]
+		}
+	]
+}
