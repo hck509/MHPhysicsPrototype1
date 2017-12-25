@@ -1,11 +1,25 @@
 #pragma once
 
 #include "Math/Vector.h"
+#include "MHPhysics.generated.h"
 
 struct FMHNode
 {
-	FVector Position;
 	float Mass;
+	FVector Position;
+
+	// Intermediate Data
+	FVector Velocity;
+	FVector Force;
+
+	void InitNode(float InMass, const FVector& InPosition)
+	{
+		Mass = InMass;
+		Position = InPosition;
+
+		Velocity = FVector::ZeroVector;
+		Force = FVector::ZeroVector;
+	}
 };
 
 struct FMHEdge
@@ -40,6 +54,20 @@ struct FMHMeshInfo
 	}
 };
 
+USTRUCT(Blueprintable)
+struct FMHPhsycisSetting
+{
+	GENERATED_BODY()
+
+	UPROPERTY()
+	FVector Gravity;
+
+	FMHPhsycisSetting()
+	{
+		Gravity.Set(0, 0, -980.0f);
+	}
+};
+
 class FMHPhysics
 {
 public:
@@ -47,13 +75,15 @@ public:
 	~FMHPhysics();
 	
 	void GenerateFromStaticMesheActors(UWorld* World);
-	FMHMeshInfo GenerateFromStaticMesh(const UStaticMesh& Mesh, const FTransform& Transform);
+	FMHMeshInfo GenerateFromStaticMesh(const UStaticMesh& Mesh, const FTransform& Transform, float MeshMassInKg);
 
 	void Tick(float DeltaSeconds);
 
 	void DebugDraw(UWorld* World);
 
 private:
+	FMHPhsycisSetting Setting;
+
 	TArray<FMHNode> Nodes;
 	TArray<FMHEdge> Edges;
 	TArray<FMHTriangle> Triangles;

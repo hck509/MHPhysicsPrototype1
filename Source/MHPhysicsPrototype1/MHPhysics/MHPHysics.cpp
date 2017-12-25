@@ -22,12 +22,12 @@ void FMHPhysics::GenerateFromStaticMesheActors(UWorld* World)
 		UStaticMesh* StaticMesh = StaticMeshActor->GetStaticMeshComponent()->GetStaticMesh();
 		if (StaticMesh)
 		{
-			GenerateFromStaticMesh(*StaticMesh, StaticMeshActor->GetActorTransform());
+			GenerateFromStaticMesh(*StaticMesh, StaticMeshActor->GetActorTransform(), 0.0f);
 		}
 	}
 }
 
-FMHMeshInfo FMHPhysics::GenerateFromStaticMesh(const UStaticMesh& Mesh, const FTransform& Transform)
+FMHMeshInfo FMHPhysics::GenerateFromStaticMesh(const UStaticMesh& Mesh, const FTransform& Transform, float MeshMassInKg)
 {
 	FMHMeshInfo NewMeshInfo;
 
@@ -43,12 +43,17 @@ FMHMeshInfo FMHPhysics::GenerateFromStaticMesh(const UStaticMesh& Mesh, const FT
 	const int32 NodeOffset = Nodes.Num();
 
 	const FStaticMeshLODResources& Resource = Mesh.RenderData->LODResources[0];
+	const uint32 NumVertices = Resource.PositionVertexBuffer.GetNumVertices();
+	const float MassPerNode = NumVertices > 0 ? MeshMassInKg / NumVertices : 0;
 	
-	for (uint32 VertexIndex = 0; VertexIndex < Resource.PositionVertexBuffer.GetNumVertices(); ++VertexIndex)
+	for (uint32 VertexIndex = 0; VertexIndex < NumVertices; ++VertexIndex)
 	{
 		const FVector Position = Transform.TransformPosition(Resource.PositionVertexBuffer.VertexPosition(VertexIndex));
 
-		Nodes.Add(FMHNode({ Position, 1.0f }));
+		FMHNode NewNode;
+		NewNode.InitNode(MassPerNode, Position);
+
+		Nodes.Add(NewNode);
 	}
 
 	FIndexArrayView IndexArrayView = Resource.IndexBuffer.GetArrayView();
@@ -72,7 +77,21 @@ FMHMeshInfo FMHPhysics::GenerateFromStaticMesh(const UStaticMesh& Mesh, const FT
 
 void FMHPhysics::Tick(float DeltaSeconds)
 {
+	// Apply gravity
+	for (FMHNode& Node : Nodes)
+	{
+		Node.Force = Node.Mass * Setting.Gravity;
+	}
 
+
+	// Euler Integration
+	for (FMHNode& Node : Nodes)
+	{
+		FVector Acceleration = Node.Mass > 0.0f ? Node.Force / Node.Mass : FVector::ZeroVector;
+		FVector AddVelocity = Acceleration * DeltaSeconds;
+		Node.Position += (Node.Velocity + (AddVelocity * 0.5f)) * DeltaSeconds;
+		Node.Velocity += AddVelocity;
+	}
 }
 
 void FMHPhysics::DebugDraw(UWorld* World)

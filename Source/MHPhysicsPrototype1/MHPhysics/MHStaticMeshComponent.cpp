@@ -66,7 +66,7 @@ void UMHStaticMeshComponent::InitializeCustomMesh()
 
 			if (GameMode)
 			{
-				MHMeshInfo = GameMode->GetMHPhyscis().GenerateFromStaticMesh(*StaticMesh, GetComponentTransform());
+				MHMeshInfo = GameMode->GetMHPhyscis().GenerateFromStaticMesh(*StaticMesh, GetComponentTransform(), MassInKg);
 			}
 		}
 	}

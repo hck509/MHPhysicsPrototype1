@@ -35,5 +35,8 @@ private:
 	UPROPERTY(BlueprintReadOnly, Category = Mesh, meta = (AllowPrivateAccess = "true"))
 	class UCustomMeshComponent* CustomMeshComponent;
 
+	UPROPERTY(EditInstanceOnly, BlueprintReadOnly, Category = MHPHysics, meta = (AllowPrivateAccess = "true"))
+	float MassInKg;
+
 	FMHMeshInfo MHMeshInfo;
 };
