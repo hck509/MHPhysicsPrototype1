@@ -9,6 +9,7 @@ struct FMHNode
 	FVector Position;
 
 	// Intermediate Data
+	FVector PrevPosition;
 	FVector Velocity;
 	FVector Force;
 
@@ -17,6 +18,7 @@ struct FMHNode
 		Mass = InMass;
 		Position = InPosition;
 
+		PrevPosition = Position;
 		Velocity = FVector::ZeroVector;
 		Force = FVector::ZeroVector;
 	}
@@ -54,6 +56,19 @@ struct FMHMeshInfo
 	}
 };
 
+struct FMHContact
+{
+	int32 TriangleIndices[2];
+	float Depth;
+	FVector Normal;	// Triangle 2 to 1
+
+	// Node to Plane
+	struct FNodeToPlane
+	{
+		int32 NodeIndex;
+	} NodeToPlane;
+};
+
 USTRUCT(Blueprintable)
 struct FMHPhsycisSetting
 {
@@ -87,4 +102,6 @@ private:
 	TArray<FMHNode> Nodes;
 	TArray<FMHEdge> Edges;
 	TArray<FMHTriangle> Triangles;
+
+	TArray<FMHContact> Contacts;
 };
