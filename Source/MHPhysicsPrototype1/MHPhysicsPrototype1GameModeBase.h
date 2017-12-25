@@ -14,11 +14,14 @@ UCLASS()
 class MHPHYSICSPROTOTYPE1_API AMHPhysicsPrototype1GameModeBase : public AGameModeBase
 {
 	GENERATED_BODY()
+public:
 
 	AMHPhysicsPrototype1GameModeBase();
 	
 	virtual void StartPlay() override;
 	virtual void Tick(float DeltaSeconds) override;
+
+	FMHPhysics& GetMHPhyscis() { return MHPhysics; }
 
 private:
 	FMHPhysics MHPhysics;

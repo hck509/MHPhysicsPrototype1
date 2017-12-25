@@ -27,12 +27,18 @@ void FMHPhysics::GenerateFromStaticMesheActors(UWorld* World)
 	}
 }
 
-void FMHPhysics::GenerateFromStaticMesh(const UStaticMesh& Mesh, const FTransform& Transform)
+FMHMeshInfo FMHPhysics::GenerateFromStaticMesh(const UStaticMesh& Mesh, const FTransform& Transform)
 {
+	FMHMeshInfo NewMeshInfo;
+
 	if (!ensure(Mesh.RenderData.IsValid()) || !ensure(Mesh.RenderData->LODResources.Num() > 0))
 	{
-		return;
+		return NewMeshInfo;
 	}
+
+	NewMeshInfo.NodeIndex = Nodes.Num();
+	NewMeshInfo.EdgeIndex = Edges.Num();
+	NewMeshInfo.TriangleIndex = Triangles.Num();
 
 	const int32 NodeOffset = Nodes.Num();
 
@@ -51,11 +57,17 @@ void FMHPhysics::GenerateFromStaticMesh(const UStaticMesh& Mesh, const FTransfor
 
 	for (int32 Index = 0; Index + 2 < IndexArrayView.Num(); Index += 3)
 	{
-		Triangles.Add(FMHTriangle({ 
-			NodeOffset + static_cast<int32>(IndexArrayView[Index]), 
-			NodeOffset + static_cast<int32>(IndexArrayView[Index + 1]), 
+		Triangles.Add(FMHTriangle({
+			NodeOffset + static_cast<int32>(IndexArrayView[Index]),
+			NodeOffset + static_cast<int32>(IndexArrayView[Index + 1]),
 			NodeOffset + static_cast<int32>(IndexArrayView[Index + 2]) }));
 	}
+
+	NewMeshInfo.NumNodes = Nodes.Num() - NewMeshInfo.NodeIndex;
+	NewMeshInfo.NumEdges = Edges.Num() - NewMeshInfo.EdgeIndex;
+	NewMeshInfo.NumTriangles = Triangles.Num() - NewMeshInfo.TriangleIndex;
+
+	return NewMeshInfo;
 }
 
 void FMHPhysics::Tick(float DeltaSeconds)
