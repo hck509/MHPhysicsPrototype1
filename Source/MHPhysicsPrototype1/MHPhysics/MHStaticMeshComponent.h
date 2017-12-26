@@ -5,6 +5,11 @@
 #include "CoreMinimal.h"
 #include "Components/MeshComponent.h"
 #include "MHPhysics/MHPHysics.h"
+
+#if WITH_EDITORONLY_DATA
+#include "IDetailCustomization.h"
+#endif
+
 #include "MHStaticMeshComponent.generated.h"
 
 
@@ -27,6 +32,11 @@ public:
 	virtual void TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction) override;
 
 	void InitializeCustomMesh();
+	void InitializeFromChunk();
+
+#if WITH_EDITORONLY_DATA
+	void ImportFBX();
+#endif
 		
 private:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = StaticMesh, meta = (AllowPrivateAccess = "true"))
@@ -44,5 +54,28 @@ private:
 	UPROPERTY(EditInstanceOnly, BlueprintReadOnly, Category = MHPHysics, meta = (AllowPrivateAccess = "true"))
 	float SpringD;
 
+	UPROPERTY()
+	FMHChunk MHChunk;
+
 	FMHMeshInfo MHMeshInfo;
 };
+
+#if WITH_EDITORONLY_DATA
+
+class FMHStaticMeshComponentDetails : public IDetailCustomization
+{
+public:
+	/** Makes a new instance of this detail layout class for a specific detail view requesting it */
+	static TSharedRef<IDetailCustomization> MakeInstance();
+
+private:
+	/** IDetailCustomization interface */
+	virtual void CustomizeDetails(IDetailLayoutBuilder& DetailLayout) override;
+
+	FReply ImportFBX();
+
+private:
+	TArray<TWeakObjectPtr<UMHStaticMeshComponent>> Components;
+};
+
+#endif

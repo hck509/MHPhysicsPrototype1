@@ -5,6 +5,96 @@
 #include "MHPhysicsPrototype1GameModeBase.h"
 #include "Engine/World.h"
 
+#if WITH_EDITORONLY_DATA
+
+#include "FeedbackContext.h"
+#include "DetailLayoutBuilder.h"
+#include "DetailCategoryBuilder.h"
+#include "IDetailsView.h"
+#include "DetailWidgetRow.h"
+
+#include "IDesktopPlatform.h"
+#include "DesktopPlatformModule.h"
+#include "SlateApplication.h"
+#include "EditorDirectories.h"
+
+#define LOCTEXT_NAMESPACE "MHStaticMeshComponentDetails"
+
+TSharedRef<IDetailCustomization> FMHStaticMeshComponentDetails::MakeInstance()
+{
+	return MakeShareable(new FMHStaticMeshComponentDetails);
+}
+
+void FMHStaticMeshComponentDetails::CustomizeDetails(IDetailLayoutBuilder& DetailLayout)
+{
+	const TArray< TWeakObjectPtr<UObject> >& SelectedObjects = DetailLayout.GetDetailsView()->GetSelectedObjects();
+
+	for (int32 ObjectIndex = 0; ObjectIndex < SelectedObjects.Num(); ++ObjectIndex)
+	{
+		const TWeakObjectPtr<UObject>& CurrentObject = SelectedObjects[ObjectIndex];
+		if (CurrentObject.IsValid())
+		{
+			UMHStaticMeshComponent* CurrentComponents = Cast<UMHStaticMeshComponent>(CurrentObject.Get());
+			if (CurrentComponents != NULL)
+			{
+				Components.Add(CurrentComponents);
+			}
+
+			AActor* Actor = Cast<AActor>(CurrentObject.Get());
+			if (Actor)
+			{
+				TInlineComponentArray<UMHStaticMeshComponent*> Components;
+				Actor->GetComponents(Components);
+
+				for (UMHStaticMeshComponent* Component : Components)
+				{
+					Components.Add(Component);
+				}
+			}
+		}
+	}
+
+	DetailLayout.EditCategory("MHPhysics")
+		.AddCustomRow(NSLOCTEXT("MHStaticMeshComponentDetails", "Import FBX", "Import FBX"))
+		.NameContent()
+		[
+			SNullWidget::NullWidget
+		]
+	.ValueContent()
+		[
+			SNew(SBox)
+			.WidthOverride(125)
+		[
+			SNew(SButton)
+			.ContentPadding(3)
+		.VAlign(VAlign_Center)
+		.HAlign(HAlign_Center)
+		.OnClicked(this, &FMHStaticMeshComponentDetails::ImportFBX)
+		[
+			SNew(STextBlock)
+			.Text(NSLOCTEXT("CombatCameraComponentDetails", "Import FBX", "Import FBX"))
+		.Font(IDetailLayoutBuilder::GetDetailFont())
+		]
+		]
+		];
+}
+
+FReply FMHStaticMeshComponentDetails::ImportFBX()
+{
+	for (auto& Component : Components)
+	{
+		if (Component.IsValid())
+		{
+			Component->ImportFBX();
+		}
+	}
+
+	return FReply::Handled();
+}
+
+#endif // WITH_EDITORONLY_DATA
+
+
 // Sets default values for this component's properties
 UMHStaticMeshComponent::UMHStaticMeshComponent()
 {
@@ -31,6 +121,7 @@ void UMHStaticMeshComponent::OnRegister()
 	Super::OnRegister();
 
 	InitializeCustomMesh();
+	InitializeFromChunk();
 }
 
 // Called every frame
@@ -76,3 +167,48 @@ void UMHStaticMeshComponent::InitializeCustomMesh()
 	}
 }
 
+void UMHStaticMeshComponent::InitializeFromChunk()
+{
+	if (MHChunk.Nodes.Num() == 0)
+	{
+		return;
+	}
+
+	AMHPhysicsPrototype1GameModeBase* GameMode = Cast<AMHPhysicsPrototype1GameModeBase>(GetWorld()->GetAuthGameMode());
+
+	if (GameMode)
+	{
+		MHMeshInfo = GameMode->GetMHPhyscis().GenerateFromChunk(MHChunk, GetComponentTransform(), MassInKg, SpringK, SpringD);
+	}
+}
+
+#if WITH_EDITORONLY_DATA
+
+void UMHStaticMeshComponent::ImportFBX()
+{
+	TArray<FString> OpenFilenames;
+	IDesktopPlatform* DesktopPlatform = FDesktopPlatformModule::Get();
+	bool bOpen = false;
+	if (DesktopPlatform)
+	{
+		FString ExtensionStr;
+		ExtensionStr += TEXT("FBX (*.fbx)|*.fbx|");
+
+		bOpen = DesktopPlatform->OpenFileDialog(
+			FSlateApplication::Get().FindBestParentWindowHandleForDialogs(nullptr),
+			NSLOCTEXT("MHStaticMeshComponent", "ImportFBX", "Import FBX from...").ToString(),
+			FEditorDirectories::Get().GetLastDirectory(ELastDirectory::FBX),
+			TEXT(""),
+			*ExtensionStr,
+			EFileDialogFlags::None,
+			OpenFilenames
+		);
+
+		if (bOpen && OpenFilenames.Num() > 0)
+		{
+			MHChunk.LoadFromFbx(OpenFilenames[0]);
+		}
+	}
+}
+
+#endif // WITH_EDITORONLY_DATA

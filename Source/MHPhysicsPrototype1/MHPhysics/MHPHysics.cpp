@@ -3,6 +3,11 @@
 #include "EngineUtils.h"
 #include "Engine/StaticMeshActor.h"
 
+#if WITH_EDITOR
+#include "FbxImporter.h"
+#include "Misc/Paths.h"
+#endif
+
 static TAutoConsoleVariable<float> CVarMHPhysicsSpeed(
 	TEXT("mhp.speed"),
 	1.0f,
@@ -140,6 +145,41 @@ FMHMeshInfo FMHPhysics::GenerateFromStaticMesh(const UStaticMesh& Mesh, const FT
 		Edges.Add(FMHEdge({ NewTriangle.NodeIndices[0], NewTriangle.NodeIndices[1], SpringK, SpringD, Distances[0] }));
 		Edges.Add(FMHEdge({ NewTriangle.NodeIndices[0], NewTriangle.NodeIndices[2], SpringK, SpringD, Distances[1] }));
 		Edges.Add(FMHEdge({ NewTriangle.NodeIndices[1], NewTriangle.NodeIndices[2], SpringK, SpringD, Distances[2] }));
+	}
+
+	NewMeshInfo.NumNodes = Nodes.Num() - NewMeshInfo.NodeIndex;
+	NewMeshInfo.NumEdges = Edges.Num() - NewMeshInfo.EdgeIndex;
+	NewMeshInfo.NumTriangles = Triangles.Num() - NewMeshInfo.TriangleIndex;
+
+	return NewMeshInfo;
+}
+
+FMHMeshInfo FMHPhysics::GenerateFromChunk(const FMHChunk& Chunk, const FTransform& Transform, float MeshMassInKg, float SpringK, float SpringD)
+{
+	FMHMeshInfo NewMeshInfo;
+
+	NewMeshInfo.NodeIndex = Nodes.Num();
+	NewMeshInfo.EdgeIndex = Edges.Num();
+	NewMeshInfo.TriangleIndex = Triangles.Num();
+
+	const int32 NodeOffset = Nodes.Num();
+	const int32 NumNodes = Chunk.Nodes.Num();
+	const float MassPerNode = NumNodes > 0 ? MeshMassInKg / NumNodes : 0;
+
+	for (int32 i = 0; i < NumNodes; ++i)
+	{
+		FMHNode NewNode;
+		NewNode.InitNode(MassPerNode, Transform.TransformPosition(Chunk.Nodes[i].Position));
+
+		Nodes.Add(NewNode);
+	}
+
+	const int32 NumEdges = Chunk.Edges.Num();
+	for (int32 i = 0; i < NumEdges; ++i)
+	{
+		const float Distance = (Nodes[Chunk.Edges[i].NodeIndices[0]].Position - Nodes[Chunk.Edges[i].NodeIndices[1]].Position).Size();
+
+		Edges.Add(FMHEdge({ NodeOffset + Chunk.Edges[i].NodeIndices[0], NodeOffset + Chunk.Edges[i].NodeIndices[1], SpringK, SpringD, Distance }));
 	}
 
 	NewMeshInfo.NumNodes = Nodes.Num() - NewMeshInfo.NodeIndex;
@@ -379,3 +419,60 @@ void FMHPhysics::DebugDraw(UWorld* World)
 			Center + (FVector(Plane) * 30.0f), 5.0f, FColor::White, false, -1.0f, 1, 2.0f);
 	}
 }
+
+#if WITH_EDITOR
+
+FVector _ConvertFbxPos(FbxVector4 Vector)
+{
+	FVector Out;
+	Out[0] = Vector[0] * 100.0f;
+	// flip Y, then the right-handed axis system is converted to LHS
+	Out[1] = -Vector[1] * 100.0f;
+	Out[2] = Vector[2] * 100.0f;
+	return Out;
+}
+
+bool FMHChunk::LoadFromFbx(const FString& Filename)
+{
+	Clear();
+
+	UnFbx::FFbxImporter* FFbxImporter = UnFbx::FFbxImporter::GetInstance();
+
+	if (!FFbxImporter->ImportFromFile(*Filename, FPaths::GetExtension(Filename), true))
+	{
+		return false;
+	}
+
+	TArray<FbxNode*> FbxMeshArray;
+
+	FFbxImporter->FillFbxMeshArray(FFbxImporter->Scene->GetRootNode(), FbxMeshArray, FFbxImporter);
+
+	for (FbxNode* Node : FbxMeshArray)
+	{
+		const FbxMesh* Mesh = Node->GetMesh();
+		check(Mesh);
+
+		int32 NumVertices = Mesh->GetControlPointsCount();
+
+		for (int32 i = 0; i < NumVertices; ++i)
+		{
+			const FbxVector4& FbxPosition = Mesh->GetControlPoints()[i];
+
+			Nodes.Add(FMHChunkNode({ _ConvertFbxPos(FbxPosition) }));
+		}
+
+		int32 NumEdges = Mesh->GetMeshEdgeCount();
+
+		for (int32 i = 0; i < NumEdges; ++i)
+		{
+			int32 VertexIndices[2];
+			Mesh->GetMeshEdgeVertices(i, VertexIndices[0], VertexIndices[1]);
+
+			Edges.Add(FMHChunkEdge({ VertexIndices[0], VertexIndices[1] }));
+		}
+	}
+
+	return true;
+}
+
+#endif // WITH_EDITORONLY_DATA

@@ -13,6 +13,15 @@ public class MHPhysicsPrototype1 : ModuleRules
 		PrivateDependencyModuleNames.AddRange(new string[] { "CustomMeshComponent" });
         PrivateIncludePathModuleNames.AddRange(new string[] { "CustomMeshComponent" });
 
+        if (Target.bBuildEditor)
+        {
+            PublicDependencyModuleNames.AddRange(new string[] { "UnrealEd", "DesktopPlatform", "Slate", "SlateCore", "EditorStyle" });
+        }
+
+        AddEngineThirdPartyPrivateStaticDependencies(Target,
+            "FBX"
+        );
+
         // Uncomment if you are using Slate UI
         // PrivateDependencyModuleNames.AddRange(new string[] { "Slate", "SlateCore" });
 

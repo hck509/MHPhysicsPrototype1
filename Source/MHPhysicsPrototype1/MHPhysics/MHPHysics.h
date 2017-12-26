@@ -3,6 +3,59 @@
 #include "Math/Vector.h"
 #include "MHPhysics.generated.h"
 
+USTRUCT()
+struct FMHChunkNode
+{
+	GENERATED_BODY()
+
+	UPROPERTY()
+	FVector Position;
+};
+
+USTRUCT()
+struct FMHChunkEdge
+{
+	GENERATED_BODY()
+
+	UPROPERTY()
+	int32 NodeIndices[2];
+};
+
+USTRUCT()
+struct FMHChunkTriangle
+{
+	GENERATED_BODY()
+
+	UPROPERTY()
+	int32 NodeIndices[3];
+};
+
+USTRUCT()
+struct FMHChunk
+{
+	GENERATED_BODY()
+
+	UPROPERTY()
+	TArray<FMHChunkNode> Nodes;
+
+	UPROPERTY()
+	TArray<FMHChunkEdge> Edges;
+
+	UPROPERTY()
+	TArray<FMHChunkTriangle> Triangles;
+
+	void Clear()
+	{
+		Nodes.Empty();
+		Edges.Empty();
+		Triangles.Empty();
+	}
+
+#if WITH_EDITORONLY_DATA
+	bool LoadFromFbx(const FString& Filename);
+#endif
+};
+
 struct FMHNode
 {
 	float Mass;
@@ -105,6 +158,7 @@ public:
 	
 	void GenerateFromStaticMesheActors(UWorld* World);
 	FMHMeshInfo GenerateFromStaticMesh(const UStaticMesh& Mesh, const FTransform& Transform, float MeshMassInKg, float SpringK, float SpringD);
+	FMHMeshInfo GenerateFromChunk(const FMHChunk& Chunk, const FTransform& Transform, float MeshMassInKg, float SpringK, float SpringD);
 
 	void Tick(float DeltaSeconds);
 
