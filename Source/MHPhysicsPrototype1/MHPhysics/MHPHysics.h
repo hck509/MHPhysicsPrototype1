@@ -71,11 +71,16 @@ struct FMHContact
 	float Depth;
 	FVector Normal;	// Triangle 2 to 1
 
-	// Node to Plane
-	struct FNodeToPlane
+	enum class EType
+	{
+		NodeToTriangle
+	} Type;
+
+	// Node to Triangle. TriangleIndices[1] is triangle side.
+	struct FNodeToTriangle
 	{
 		int32 NodeIndex;
-	} NodeToPlane;
+	} NodeToTriangle;
 };
 
 USTRUCT(Blueprintable)

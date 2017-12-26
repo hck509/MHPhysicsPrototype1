@@ -165,18 +165,23 @@ static void _DetectCollisionTriangleToTriangle(const TArray<FMHNode>& Nodes,
 		Nodes[Triangle1.NodeIndices[1]].Position,
 		Nodes[Triangle1.NodeIndices[2]].Position);
 
-	const float Depth = 0.0f;
-
-	const FVector PrevPositions[3] = {
-		Nodes[Triangle1.NodeIndices[0]].PrevPosition + (FVector(Plane1.X, Plane1.Y, Plane1.Z) * Depth),
-		Nodes[Triangle1.NodeIndices[1]].PrevPosition + (FVector(Plane1.X, Plane1.Y, Plane1.Z) * Depth),
-		Nodes[Triangle1.NodeIndices[2]].PrevPosition + (FVector(Plane1.X, Plane1.Y, Plane1.Z) * Depth)
-	};
+	const FPlane PrevPlane2(
+		Nodes[Triangle2.NodeIndices[0]].PrevPosition,
+		Nodes[Triangle2.NodeIndices[1]].PrevPosition,
+		Nodes[Triangle2.NodeIndices[2]].PrevPosition);
 
 	const FPlane Plane2(
 		Nodes[Triangle2.NodeIndices[0]].Position,
 		Nodes[Triangle2.NodeIndices[1]].Position,
 		Nodes[Triangle2.NodeIndices[2]].Position);
+
+	const float Depth = 5.0f;
+
+	const FVector PrevPositions[3] = {
+		Nodes[Triangle1.NodeIndices[0]].PrevPosition + (FVector(PrevPlane2) * Depth),
+		Nodes[Triangle1.NodeIndices[1]].PrevPosition + (FVector(PrevPlane2) * Depth),
+		Nodes[Triangle1.NodeIndices[2]].PrevPosition + (FVector(PrevPlane2) * Depth)
+	};
 
 	// Node to Plane
 	for (int32 i = 0; i < 3; ++i)
@@ -186,14 +191,16 @@ static void _DetectCollisionTriangleToTriangle(const TArray<FMHNode>& Nodes,
 			continue;
 		}
 
-		const float PrevDistance = Plane2.PlaneDot(PrevPositions[i]);
+		const float PrevDistance = PrevPlane2.PlaneDot(PrevPositions[i]);
 		const float Distance = Plane2.PlaneDot(Positions[i]);
 
 		if (PrevDistance >= 0 && Distance <= 0)
 		{
 			float t;
 
-			if (_RayTriangleIntersect(PrevPositions[i], (Positions[i] - PrevPositions[i]).GetSafeNormal(),
+			//if (_RayTriangleIntersect(PrevPositions[i], (Positions[i] - PrevPositions[i]).GetSafeNormal(),
+
+			if (_RayTriangleIntersect(Positions[i], FVector(Plane2.X, Plane2.Y, Plane2.Z),
 				Nodes[Triangle2.NodeIndices[0]].Position,
 				Nodes[Triangle2.NodeIndices[1]].Position,
 				Nodes[Triangle2.NodeIndices[2]].Position, t))
@@ -202,9 +209,10 @@ static void _DetectCollisionTriangleToTriangle(const TArray<FMHNode>& Nodes,
 				Contact.TriangleIndices[0] = TriangleIndex1;
 				Contact.TriangleIndices[1] = TriangleIndex2;
 				Contact.Depth = -Distance;
-				Contact.Normal = FVector(Plane2.X, Plane2.Y, Plane2.Z);
+				Contact.Normal = FVector(Plane2);
 
-				Contact.NodeToPlane.NodeIndex = Triangle1.NodeIndices[i];
+				Contact.Type = FMHContact::EType::NodeToTriangle;
+				Contact.NodeToTriangle.NodeIndex = Triangle1.NodeIndices[i];
 
 				OutContacts.Add(Contact);
 			}
@@ -265,19 +273,40 @@ void FMHPhysics::Tick(float DeltaSeconds)
 	// Adjust position by contact
 	for (const FMHContact& Contact : Contacts)
 	{
-		FMHNode& Node = Nodes[Contact.NodeToPlane.NodeIndex];
-		if (Node.Mass != 0.0f)
+		if (Contact.Type == FMHContact::EType::NodeToTriangle)
 		{
-			//Node.Position += Contact.Normal * Contact.Depth;
-			const FVector Movement = Node.Position - Node.PrevPosition;
-			const float MoveDistance = Movement.Size();
-			const float ContactNormalDotMovement = - (Movement.GetSafeNormal() | Contact.Normal);
-			const float MoveBackward = ContactNormalDotMovement > SMALL_NUMBER ? 
-				FMath::Min(MoveDistance, Contact.Depth / ContactNormalDotMovement) : 0.0f;
+			FMHNode& Node = Nodes[Contact.NodeToTriangle.NodeIndex];
+			if (Node.Mass != 0.0f)
+			{
+				{
+					//Node.Position += Contact.Normal * Contact.Depth;
+					const FVector Movement = Node.Position - Node.PrevPosition;
+					const float MoveDistance = Movement.Size();
+					const float ContactNormalDotMovement = -(Movement.GetSafeNormal() | Contact.Normal);
+					const float MoveBackward = ContactNormalDotMovement > SMALL_NUMBER ?
+						FMath::Min(MoveDistance, Contact.Depth / ContactNormalDotMovement) : 0.0f;
 
-			Node.Position -= Movement.GetSafeNormal() * MoveBackward;
-			Node.Force -= FMath::Min(Node.Force | Contact.Normal, 0.0f) * Contact.Normal;
-			Node.Velocity -= FMath::Min(Node.Velocity | Contact.Normal, 0.0f) * Contact.Normal;
+					Node.Position -= Movement.GetSafeNormal() * MoveBackward;
+					Node.Force -= FMath::Min(Node.Force | Contact.Normal, 0.0f) * Contact.Normal;
+					Node.Velocity -= FMath::Min(Node.Velocity | Contact.Normal, 0.0f) * Contact.Normal;
+				}
+			}
+
+			const int32 TriangleIndex = Contact.TriangleIndices[1];
+			const FMHTriangle& Triangle = Triangles[TriangleIndex];
+			FMHNode* TriangleNodes[] = {
+				&Nodes[Triangle.NodeIndices[0]],
+				&Nodes[Triangle.NodeIndices[1]],
+				&Nodes[Triangle.NodeIndices[2]]
+			};
+
+			for (int32 i = 0; i < 3; ++i)
+			{
+				const FVector Movement = TriangleNodes[i]->Position - TriangleNodes[i]->PrevPosition;
+				TriangleNodes[i]->Position -= Movement;
+				TriangleNodes[i]->Force -= FMath::Max(TriangleNodes[i]->Force | Contact.Normal, 0.0f) * Contact.Normal;
+				TriangleNodes[i]->Velocity -= FMath::Max(TriangleNodes[i]->Velocity | Contact.Normal, 0.0f) * Contact.Normal;
+			}
 		}
 	}
 
@@ -313,9 +342,9 @@ void FMHPhysics::DebugDraw(UWorld* World)
 
 	for (const FMHContact& Contact : Contacts)
 	{
-		::DrawDebugPoint(World, Nodes[Contact.NodeToPlane.NodeIndex].Position, 10.0f, FColor::Red, false, 0);
-		::DrawDebugDirectionalArrow(World, Nodes[Contact.NodeToPlane.NodeIndex].Position,
-			Nodes[Contact.NodeToPlane.NodeIndex].Position + (Contact.Normal * 30.0f), 5.0f, FColor::Red, false, -1.0f, 1, 2.0f);
+		::DrawDebugPoint(World, Nodes[Contact.NodeToTriangle.NodeIndex].Position, 10.0f, FColor::Red, false, 0);
+		::DrawDebugDirectionalArrow(World, Nodes[Contact.NodeToTriangle.NodeIndex].Position,
+			Nodes[Contact.NodeToTriangle.NodeIndex].Position + (Contact.Normal * 30.0f), 5.0f, FColor::Red, false, -1.0f, 1, 2.0f);
 	}
 
 	for (const FMHTriangle& Triangle : Triangles)
