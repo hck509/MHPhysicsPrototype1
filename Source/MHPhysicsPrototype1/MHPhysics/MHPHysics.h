@@ -27,11 +27,20 @@ struct FMHNode
 struct FMHEdge
 {
 	int32 NodeIndices[2];
+	float SpringK;
+	float SpringD;
+
+	float DefaultLength;
 };
 
 struct FMHTriangle
 {
 	int32 NodeIndices[3];
+
+	bool HasNodeIndex(int32 NodeIndex) const
+	{
+		return (NodeIndices[0] == NodeIndex) || (NodeIndices[1] == NodeIndex) || (NodeIndices[2] == NodeIndex);
+	}
 };
 
 struct FMHMeshInfo
@@ -90,7 +99,7 @@ public:
 	~FMHPhysics();
 	
 	void GenerateFromStaticMesheActors(UWorld* World);
-	FMHMeshInfo GenerateFromStaticMesh(const UStaticMesh& Mesh, const FTransform& Transform, float MeshMassInKg);
+	FMHMeshInfo GenerateFromStaticMesh(const UStaticMesh& Mesh, const FTransform& Transform, float MeshMassInKg, float SpringK, float SpringD);
 
 	void Tick(float DeltaSeconds);
 

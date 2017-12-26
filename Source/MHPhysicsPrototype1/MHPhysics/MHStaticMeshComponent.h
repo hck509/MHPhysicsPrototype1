@@ -38,5 +38,11 @@ private:
 	UPROPERTY(EditInstanceOnly, BlueprintReadOnly, Category = MHPHysics, meta = (AllowPrivateAccess = "true"))
 	float MassInKg;
 
+	UPROPERTY(EditInstanceOnly, BlueprintReadOnly, Category = MHPHysics, meta = (AllowPrivateAccess = "true"))
+	float SpringK;
+
+	UPROPERTY(EditInstanceOnly, BlueprintReadOnly, Category = MHPHysics, meta = (AllowPrivateAccess = "true"))
+	float SpringD;
+
 	FMHMeshInfo MHMeshInfo;
 };

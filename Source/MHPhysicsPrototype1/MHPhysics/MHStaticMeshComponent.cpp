@@ -14,6 +14,10 @@ UMHStaticMeshComponent::UMHStaticMeshComponent()
 
 	CustomMeshComponent = CreateDefaultSubobject<UCustomMeshComponent>(TEXT("CustomMeshComponent"));
 	CustomMeshComponent->SetupAttachment(this);
+
+	MassInKg = 100.0f;
+	SpringK = 1000.0f;
+	SpringD = 10.0f;
 }
 
 // Called when the game starts
@@ -66,7 +70,7 @@ void UMHStaticMeshComponent::InitializeCustomMesh()
 
 			if (GameMode)
 			{
-				MHMeshInfo = GameMode->GetMHPhyscis().GenerateFromStaticMesh(*StaticMesh, GetComponentTransform(), MassInKg);
+				MHMeshInfo = GameMode->GetMHPhyscis().GenerateFromStaticMesh(*StaticMesh, GetComponentTransform(), MassInKg, SpringK, SpringD);
 			}
 		}
 	}
