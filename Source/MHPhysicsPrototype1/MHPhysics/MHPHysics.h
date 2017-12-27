@@ -162,6 +162,9 @@ public:
 
 	void Tick(float DeltaSeconds);
 
+	const FMHNode* FindNode(int32 NodeIndex) const;
+	const FMHTriangle* FindTriangle(int32 TriangleIndex) const;
+
 	void DebugDraw(UWorld* World);
 
 private:

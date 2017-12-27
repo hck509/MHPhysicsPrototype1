@@ -31,14 +31,17 @@ public:
 	// Called every frame
 	virtual void TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction) override;
 
-	void InitializeCustomMesh();
-	void InitializeFromChunk();
-
 #if WITH_EDITORONLY_DATA
 	void ImportFBX();
 #endif
 		
 private:
+	void InitializeFromStaticMesh();
+	void InitializeFromChunk();
+
+	void UpdateCustomMeshFromChunk();
+	void UpdateCustomMeshFromMHPhysics();
+
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = StaticMesh, meta = (AllowPrivateAccess = "true"))
 	class UStaticMesh* StaticMesh;
 

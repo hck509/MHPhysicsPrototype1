@@ -120,7 +120,7 @@ void UMHStaticMeshComponent::OnRegister()
 {
 	Super::OnRegister();
 
-	InitializeCustomMesh();
+	InitializeFromStaticMesh();
 	InitializeFromChunk();
 }
 
@@ -129,17 +129,16 @@ void UMHStaticMeshComponent::TickComponent(float DeltaTime, ELevelTick TickType,
 {
 	Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
 
+	UpdateCustomMeshFromMHPhysics();
 }
 
-void UMHStaticMeshComponent::InitializeCustomMesh()
+void UMHStaticMeshComponent::InitializeFromStaticMesh()
 {
 	if (StaticMesh)
 	{
 		if (ensure(StaticMesh->RenderData.IsValid()) && ensure(StaticMesh->RenderData->LODResources.Num() > 0))
 		{
 			TArray<FCustomMeshTriangle> Triangles;
-
-			const FTransform ComponentTransform = GetComponentTransform();
 
 			const FStaticMeshLODResources& Resource = StaticMesh->RenderData->LODResources[0];
 
@@ -174,12 +173,79 @@ void UMHStaticMeshComponent::InitializeFromChunk()
 		return;
 	}
 
+	UpdateCustomMeshFromChunk();
+
 	AMHPhysicsPrototype1GameModeBase* GameMode = Cast<AMHPhysicsPrototype1GameModeBase>(GetWorld()->GetAuthGameMode());
 
 	if (GameMode)
 	{
 		MHMeshInfo = GameMode->GetMHPhyscis().GenerateFromChunk(MHChunk, GetComponentTransform(), MassInKg, SpringK, SpringD);
 	}
+}
+
+void UMHStaticMeshComponent::UpdateCustomMeshFromChunk()
+{
+	if (MHChunk.Nodes.Num() == 0)
+	{
+		return;
+	}
+
+	TArray<FCustomMeshTriangle> Triangles;
+
+	const FTransform ComponentTransform = GetComponentTransform();
+
+	for (int32 i = 0; i < MHChunk.Triangles.Num(); ++i)
+	{
+		Triangles.Add(FCustomMeshTriangle({
+			MHChunk.Nodes[MHChunk.Triangles[i].NodeIndices[0]].Position,
+			MHChunk.Nodes[MHChunk.Triangles[i].NodeIndices[2]].Position,
+			MHChunk.Nodes[MHChunk.Triangles[i].NodeIndices[1]].Position }));
+	}
+
+	CustomMeshComponent->SetCustomMeshTriangles(Triangles);
+}
+
+void UMHStaticMeshComponent::UpdateCustomMeshFromMHPhysics()
+{
+	if (MHMeshInfo.NumTriangles == 0)
+	{
+		return;
+	}
+
+	AMHPhysicsPrototype1GameModeBase* GameMode = Cast<AMHPhysicsPrototype1GameModeBase>(GetWorld()->GetAuthGameMode());
+
+	if (!GameMode)
+	{
+		return;
+	}
+
+	const FTransform ComponentTransform = GetComponentTransform();
+
+	FMHPhysics& MHPhysics = GameMode->GetMHPhyscis();
+
+	TArray<FCustomMeshTriangle> Triangles;
+
+	for (int32 i = 0; i < MHMeshInfo.NumTriangles; ++i)
+	{
+		const FMHTriangle* Triangle = MHPhysics.FindTriangle(MHMeshInfo.TriangleIndex + i);
+
+		if (ensure(Triangle))
+		{
+			const FMHNode* Node0 = MHPhysics.FindNode(Triangle->NodeIndices[0]);
+			const FMHNode* Node1 = MHPhysics.FindNode(Triangle->NodeIndices[1]);
+			const FMHNode* Node2 = MHPhysics.FindNode(Triangle->NodeIndices[2]);
+
+			if (ensure(Node0 && Node1 && Node2))
+			{
+				Triangles.Add(FCustomMeshTriangle({
+					ComponentTransform.InverseTransformPosition(Node0->Position),
+					ComponentTransform.InverseTransformPosition(Node2->Position),
+					ComponentTransform.InverseTransformPosition(Node1->Position) }));
+			}
+		}
+	}
+
+	CustomMeshComponent->SetCustomMeshTriangles(Triangles);
 }
 
 #if WITH_EDITORONLY_DATA

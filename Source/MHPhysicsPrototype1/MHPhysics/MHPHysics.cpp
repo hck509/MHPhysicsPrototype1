@@ -177,9 +177,15 @@ FMHMeshInfo FMHPhysics::GenerateFromChunk(const FMHChunk& Chunk, const FTransfor
 	const int32 NumEdges = Chunk.Edges.Num();
 	for (int32 i = 0; i < NumEdges; ++i)
 	{
-		const float Distance = (Nodes[Chunk.Edges[i].NodeIndices[0]].Position - Nodes[Chunk.Edges[i].NodeIndices[1]].Position).Size();
+		const FMHChunkEdge& Edge = Chunk.Edges[i];
+		int32 NodeIndices[2] = {
+			NodeOffset + Edge.NodeIndices[0],
+			NodeOffset + Edge.NodeIndices[1]
+		};
 
-		Edges.Add(FMHEdge({ NodeOffset + Chunk.Edges[i].NodeIndices[0], NodeOffset + Chunk.Edges[i].NodeIndices[1], SpringK, SpringD, Distance }));
+		const float Distance = (Nodes[NodeIndices[0]].Position - Nodes[NodeIndices[1]].Position).Size();
+
+		Edges.Add(FMHEdge({ NodeIndices[0], NodeIndices[1], SpringK, SpringD, Distance }));
 	}
 
 	const int32 NumTriangles = Chunk.Triangles.Num();
@@ -375,6 +381,26 @@ void FMHPhysics::Tick(float DeltaSeconds)
 	}
 }
 
+const FMHNode* FMHPhysics::FindNode(int32 NodeIndex) const
+{
+	if (Nodes.IsValidIndex(NodeIndex))
+	{
+		return &Nodes[NodeIndex];
+	}
+
+	return nullptr;
+}
+
+const FMHTriangle* FMHPhysics::FindTriangle(int32 TriangleIndex) const
+{
+	if (Triangles.IsValidIndex(TriangleIndex))
+	{
+		return &Triangles[TriangleIndex];
+	}
+
+	return nullptr;
+}
+
 void FMHPhysics::DebugDraw(UWorld* World)
 {
 	for (const FMHNode& Node : Nodes)
@@ -387,13 +413,6 @@ void FMHPhysics::DebugDraw(UWorld* World)
 		::DrawDebugLine(World,
 			Nodes[Edge.NodeIndices[0]].Position,
 			Nodes[Edge.NodeIndices[1]].Position, FColor::White, false, 0);
-	}
-
-	for (const FMHContact& Contact : Contacts)
-	{
-		::DrawDebugPoint(World, Nodes[Contact.NodeToTriangle.NodeIndex].Position, 10.0f, FColor::Red, false, 0);
-		::DrawDebugDirectionalArrow(World, Nodes[Contact.NodeToTriangle.NodeIndex].Position,
-			Nodes[Contact.NodeToTriangle.NodeIndex].Position + (Contact.Normal * 30.0f), 5.0f, FColor::Red, false, -1.0f, 1, 2.0f);
 	}
 
 	for (const FMHTriangle& Triangle : Triangles)
@@ -426,6 +445,13 @@ void FMHPhysics::DebugDraw(UWorld* World)
 
 		::DrawDebugDirectionalArrow(World, Center,
 			Center + (FVector(Plane) * 30.0f), 5.0f, FColor::White, false, -1.0f, 1, 2.0f);
+	}
+
+	for (const FMHContact& Contact : Contacts)
+	{
+		::DrawDebugPoint(World, Nodes[Contact.NodeToTriangle.NodeIndex].Position, 10.0f, FColor::Red, false, 0);
+		::DrawDebugDirectionalArrow(World, Nodes[Contact.NodeToTriangle.NodeIndex].Position,
+			Nodes[Contact.NodeToTriangle.NodeIndex].Position + (Contact.Normal * 50.0f), 20.0f, FColor::Red, false, -1.0f, 2, 4.0f);
 	}
 }
 
