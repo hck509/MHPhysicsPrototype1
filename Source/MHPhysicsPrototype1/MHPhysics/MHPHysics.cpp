@@ -182,6 +182,15 @@ FMHMeshInfo FMHPhysics::GenerateFromChunk(const FMHChunk& Chunk, const FTransfor
 		Edges.Add(FMHEdge({ NodeOffset + Chunk.Edges[i].NodeIndices[0], NodeOffset + Chunk.Edges[i].NodeIndices[1], SpringK, SpringD, Distance }));
 	}
 
+	const int32 NumTriangles = Chunk.Triangles.Num();
+	for (int32 i = 0; i < NumTriangles; ++i)
+	{
+		Triangles.Add(FMHTriangle({
+			NodeOffset + Chunk.Triangles[i].NodeIndices[0],
+			NodeOffset + Chunk.Triangles[i].NodeIndices[1],
+			NodeOffset + Chunk.Triangles[i].NodeIndices[2] }));
+	}
+
 	NewMeshInfo.NumNodes = Nodes.Num() - NewMeshInfo.NodeIndex;
 	NewMeshInfo.NumEdges = Edges.Num() - NewMeshInfo.EdgeIndex;
 	NewMeshInfo.NumTriangles = Triangles.Num() - NewMeshInfo.TriangleIndex;
@@ -449,7 +458,7 @@ bool FMHChunk::LoadFromFbx(const FString& Filename)
 
 	for (FbxNode* Node : FbxMeshArray)
 	{
-		const FbxMesh* Mesh = Node->GetMesh();
+		FbxMesh* Mesh = Node->GetMesh();
 		check(Mesh);
 
 		int32 NumVertices = Mesh->GetControlPointsCount();
@@ -470,8 +479,59 @@ bool FMHChunk::LoadFromFbx(const FString& Filename)
 
 			Edges.Add(FMHChunkEdge({ VertexIndices[0], VertexIndices[1] }));
 		}
-	}
 
+		//// Ref : UnFbx::FFbxImporter::BuildStaticMeshFromGeometry
+		//if (!Mesh->IsTriangleMesh())
+		//{
+		//	//UE_LOG(LogFbx, Warning, TEXT("Triangulating static mesh %s"), UTF8_TO_TCHAR(Node->GetName()));
+
+		//	const bool bReplace = true;
+		//	FbxNodeAttribute* ConvertedNode = FFbxImporter->GetGeometryConverter()->Triangulate(Mesh, bReplace);
+
+		//	if (ConvertedNode != NULL && ConvertedNode->GetAttributeType() == FbxNodeAttribute::eMesh)
+		//	{
+		//		Mesh = (fbxsdk::FbxMesh*)ConvertedNode;
+		//	}
+		//	else
+		//	{
+		//		//AddTokenizedErrorMessage(FTokenizedMessage::Create(EMessageSeverity::Warning, FText::Format(LOCTEXT("Error_FailedToTriangulate", "Unable to triangulate mesh '{0}'"), FText::FromString(Mesh->GetName()))), FFbxErrors::Generic_Mesh_TriangulationFailed);
+		//		ensure(0);
+		//		return false; // not clean, missing some dealloc
+		//	}
+		//}
+
+		//if (ensure(Mesh->IsTriangleMesh()))
+		{
+			int32 NumTriangles = Mesh->GetPolygonCount();
+
+			for (int32 i = 0; i < NumTriangles; ++i)
+			{
+				if (Mesh->GetPolygonSize(i) == 3)
+				{
+					bool bValidTriangle = true;
+					int32 NodeIndices[3];
+
+					for (int32 CornerIndex = 0; CornerIndex < 3; ++CornerIndex)
+					{
+						int32 ControlPointIndex = Mesh->GetPolygonVertex(i, CornerIndex);
+
+						if (!ensure(Nodes.IsValidIndex(ControlPointIndex)))
+						{
+							bValidTriangle = false;
+							break;
+						}
+
+						NodeIndices[CornerIndex] = ControlPointIndex;
+					}
+
+					if (bValidTriangle)
+					{
+						Triangles.Add(FMHChunkTriangle({ NodeIndices[0], NodeIndices[2], NodeIndices[1] }));
+					}
+				}
+			}
+		}
+	}
 	return true;
 }
 
