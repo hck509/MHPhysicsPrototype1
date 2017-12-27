@@ -20,6 +20,8 @@
 
 #define LOCTEXT_NAMESPACE "MHStaticMeshComponentDetails"
 
+DECLARE_CYCLE_STAT(TEXT("Update Custom Mesh"), STAT_UpdateCustomMesh, STATGROUP_MHPhysics);
+
 TSharedRef<IDetailCustomization> FMHStaticMeshComponentDetails::MakeInstance()
 {
 	return MakeShareable(new FMHStaticMeshComponentDetails);
@@ -207,6 +209,8 @@ void UMHStaticMeshComponent::UpdateCustomMeshFromChunk()
 
 void UMHStaticMeshComponent::UpdateCustomMeshFromMHPhysics()
 {
+	SCOPE_CYCLE_COUNTER(STAT_UpdateCustomMesh);
+
 	if (MHMeshInfo.NumTriangles == 0)
 	{
 		return;

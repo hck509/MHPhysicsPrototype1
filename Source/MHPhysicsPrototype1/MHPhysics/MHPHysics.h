@@ -3,6 +3,8 @@
 #include "Math/Vector.h"
 #include "MHPhysics.generated.h"
 
+DECLARE_STATS_GROUP(TEXT("MHPhysics"), STATGROUP_MHPhysics, STATCAT_Advanced);
+
 USTRUCT()
 struct FMHChunkNode
 {
@@ -89,6 +91,42 @@ struct FMHEdge
 struct FMHTriangle
 {
 	int32 NodeIndices[3];
+
+	enum ECacheBitFlags
+	{
+		ValidPlane = (1 << 0),
+		ValidPrevPlane = (1 << 1)
+	};
+
+	// Cache
+	mutable uint32 CacheFlags;
+	mutable FPlane CachedPlane;
+	mutable FPlane CachedPrevPlane;
+	mutable FBox CachedBBox;	// Axis-aligned bounding box from prev position to current position
+
+	FMHTriangle()
+	{
+		CacheFlags = 0;
+	}
+
+	void UpdateBBox(const TArray<FMHNode>& Nodes)
+	{
+		CachedBBox.Min.X = FMath::Min3(Nodes[NodeIndices[0]].Position.X, Nodes[NodeIndices[1]].Position.X, Nodes[NodeIndices[2]].Position.X);
+		CachedBBox.Min.Y = FMath::Min3(Nodes[NodeIndices[0]].Position.Y, Nodes[NodeIndices[1]].Position.Y, Nodes[NodeIndices[2]].Position.Y);
+		CachedBBox.Min.Z = FMath::Min3(Nodes[NodeIndices[0]].Position.Z, Nodes[NodeIndices[1]].Position.Z, Nodes[NodeIndices[2]].Position.Z);
+
+		CachedBBox.Min.X = FMath::Min3(FMath::Min(CachedBBox.Min.X, Nodes[NodeIndices[0]].PrevPosition.X), Nodes[NodeIndices[1]].PrevPosition.X, Nodes[NodeIndices[2]].PrevPosition.X);
+		CachedBBox.Min.Y = FMath::Min3(FMath::Min(CachedBBox.Min.Y, Nodes[NodeIndices[0]].PrevPosition.Y), Nodes[NodeIndices[1]].PrevPosition.Y, Nodes[NodeIndices[2]].PrevPosition.Y);
+		CachedBBox.Min.Z = FMath::Min3(FMath::Min(CachedBBox.Min.Z, Nodes[NodeIndices[0]].PrevPosition.Z), Nodes[NodeIndices[1]].PrevPosition.Z, Nodes[NodeIndices[2]].PrevPosition.Z);
+
+		CachedBBox.Max.X = FMath::Max3(Nodes[NodeIndices[0]].Position.X, Nodes[NodeIndices[1]].Position.X, Nodes[NodeIndices[2]].Position.X);
+		CachedBBox.Max.Y = FMath::Max3(Nodes[NodeIndices[0]].Position.Y, Nodes[NodeIndices[1]].Position.Y, Nodes[NodeIndices[2]].Position.Y);
+		CachedBBox.Max.Z = FMath::Max3(Nodes[NodeIndices[0]].Position.Z, Nodes[NodeIndices[1]].Position.Z, Nodes[NodeIndices[2]].Position.Z);
+
+		CachedBBox.Max.X = FMath::Max3(FMath::Max(CachedBBox.Max.X, Nodes[NodeIndices[0]].PrevPosition.X), Nodes[NodeIndices[1]].PrevPosition.X, Nodes[NodeIndices[2]].PrevPosition.X);
+		CachedBBox.Max.Y = FMath::Max3(FMath::Max(CachedBBox.Max.Y, Nodes[NodeIndices[0]].PrevPosition.Y), Nodes[NodeIndices[1]].PrevPosition.Y, Nodes[NodeIndices[2]].PrevPosition.Y);
+		CachedBBox.Max.Z = FMath::Max3(FMath::Max(CachedBBox.Max.Z, Nodes[NodeIndices[0]].PrevPosition.Z), Nodes[NodeIndices[1]].PrevPosition.Z, Nodes[NodeIndices[2]].PrevPosition.Z);
+	}
 
 	bool HasNodeIndex(int32 NodeIndex) const
 	{
