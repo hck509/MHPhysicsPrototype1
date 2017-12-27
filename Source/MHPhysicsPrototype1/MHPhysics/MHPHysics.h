@@ -115,13 +115,13 @@ struct FMHTriangle
 		CachedBBox.Min.Y = FMath::Min3(Nodes[NodeIndices[0]].Position.Y, Nodes[NodeIndices[1]].Position.Y, Nodes[NodeIndices[2]].Position.Y);
 		CachedBBox.Min.Z = FMath::Min3(Nodes[NodeIndices[0]].Position.Z, Nodes[NodeIndices[1]].Position.Z, Nodes[NodeIndices[2]].Position.Z);
 
-		CachedBBox.Min.X = FMath::Min3(FMath::Min(CachedBBox.Min.X, Nodes[NodeIndices[0]].PrevPosition.X), Nodes[NodeIndices[1]].PrevPosition.X, Nodes[NodeIndices[2]].PrevPosition.X);
-		CachedBBox.Min.Y = FMath::Min3(FMath::Min(CachedBBox.Min.Y, Nodes[NodeIndices[0]].PrevPosition.Y), Nodes[NodeIndices[1]].PrevPosition.Y, Nodes[NodeIndices[2]].PrevPosition.Y);
-		CachedBBox.Min.Z = FMath::Min3(FMath::Min(CachedBBox.Min.Z, Nodes[NodeIndices[0]].PrevPosition.Z), Nodes[NodeIndices[1]].PrevPosition.Z, Nodes[NodeIndices[2]].PrevPosition.Z);
-
 		CachedBBox.Max.X = FMath::Max3(Nodes[NodeIndices[0]].Position.X, Nodes[NodeIndices[1]].Position.X, Nodes[NodeIndices[2]].Position.X);
 		CachedBBox.Max.Y = FMath::Max3(Nodes[NodeIndices[0]].Position.Y, Nodes[NodeIndices[1]].Position.Y, Nodes[NodeIndices[2]].Position.Y);
 		CachedBBox.Max.Z = FMath::Max3(Nodes[NodeIndices[0]].Position.Z, Nodes[NodeIndices[1]].Position.Z, Nodes[NodeIndices[2]].Position.Z);
+
+		CachedBBox.Min.X = FMath::Min3(FMath::Min(CachedBBox.Min.X, Nodes[NodeIndices[0]].PrevPosition.X), Nodes[NodeIndices[1]].PrevPosition.X, Nodes[NodeIndices[2]].PrevPosition.X);
+		CachedBBox.Min.Y = FMath::Min3(FMath::Min(CachedBBox.Min.Y, Nodes[NodeIndices[0]].PrevPosition.Y), Nodes[NodeIndices[1]].PrevPosition.Y, Nodes[NodeIndices[2]].PrevPosition.Y);
+		CachedBBox.Min.Z = FMath::Min3(FMath::Min(CachedBBox.Min.Z, Nodes[NodeIndices[0]].PrevPosition.Z), Nodes[NodeIndices[1]].PrevPosition.Z, Nodes[NodeIndices[2]].PrevPosition.Z);
 
 		CachedBBox.Max.X = FMath::Max3(FMath::Max(CachedBBox.Max.X, Nodes[NodeIndices[0]].PrevPosition.X), Nodes[NodeIndices[1]].PrevPosition.X, Nodes[NodeIndices[2]].PrevPosition.X);
 		CachedBBox.Max.Y = FMath::Max3(FMath::Max(CachedBBox.Max.Y, Nodes[NodeIndices[0]].PrevPosition.Y), Nodes[NodeIndices[1]].PrevPosition.Y, Nodes[NodeIndices[2]].PrevPosition.Y);
