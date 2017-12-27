@@ -206,6 +206,8 @@ public:
 	void DebugDraw(UWorld* World);
 
 private:
+	void Step(float DeltaSeconds);
+
 	FMHPhsycisSetting Setting;
 
 	TArray<FMHNode> Nodes;
@@ -213,4 +215,6 @@ private:
 	TArray<FMHTriangle> Triangles;
 
 	TArray<FMHContact> Contacts;
+
+	float TickSecondLeft;
 };

@@ -8,6 +8,12 @@
 #include "Misc/Paths.h"
 #endif
 
+static TAutoConsoleVariable<float> CVarMHPhysicsFPS(
+	TEXT("mhp.fps"),
+	500.0f,
+	TEXT("")
+);
+
 static TAutoConsoleVariable<float> CVarMHPhysicsSpeed(
 	TEXT("mhp.speed"),
 	1.0f,
@@ -90,7 +96,7 @@ static bool _RayTriangleIntersect(
 
 FMHPhysics::FMHPhysics()
 {
-
+	TickSecondLeft = 0;
 }
 
 FMHPhysics::~FMHPhysics()
@@ -360,8 +366,28 @@ void FMHPhysics::Tick(float DeltaSeconds)
 {
 	SCOPE_CYCLE_COUNTER(STAT_MHPhysicsTick);
 
-	DeltaSeconds = FMath::Clamp(DeltaSeconds, 0.0f, 0.01f);
 	DeltaSeconds *= CVarMHPhysicsSpeed.GetValueOnAnyThread();
+
+	const float MaxDetalSeconds = 0.1f;
+	DeltaSeconds = FMath::Min(MaxDetalSeconds, DeltaSeconds);
+
+	const float fps = FMath::Max(CVarMHPhysicsFPS.GetValueOnAnyThread(), 1.0f);
+	const float StepTickSeconds = 1.0f / fps;
+
+	DeltaSeconds += TickSecondLeft;
+
+	while (DeltaSeconds > StepTickSeconds)
+	{
+		Step(StepTickSeconds);
+		DeltaSeconds -= StepTickSeconds;
+	}
+
+	TickSecondLeft = DeltaSeconds;
+}
+
+void FMHPhysics::Step(float DeltaSeconds)
+{
+	DeltaSeconds = FMath::Clamp(DeltaSeconds, 0.0f, 0.01f);
 
 	Contacts.Reset();
 
