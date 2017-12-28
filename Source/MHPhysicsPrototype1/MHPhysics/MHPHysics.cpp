@@ -482,16 +482,37 @@ void FMHPhysics::Step(float DeltaSeconds)
 		{
 			if (Contact.Type == FMHContact::EType::NodeToTriangle)
 			{
+				const float FRICTION_COEFF = 0.5f; // TODO: parameterize
+
 				FMHNode& Node = Nodes[Contact.NodeToTriangle.NodeIndex];
 				if (Node.Mass != 0.0f)
 				{
-					const float FRICTION_COEFF = 0.5f; // TODO: parameterize
-
 					const float VertialLoad = FMath::Max(-(Node.Force | Contact.Normal), 0.0f);
 					const FVector FrictionDir = ((Node.Velocity ^ Contact.Normal) ^ Contact.Normal).GetSafeNormal();
 					const float FrictionStrength = VertialLoad * FRICTION_COEFF;
 
 					Node.Force += FrictionDir * FrictionStrength;
+				}
+
+				{
+					const int32 TriangleIndex = Contact.TriangleIndices[1];
+					const FMHTriangle& Triangle = Triangles[TriangleIndex];
+					FMHNode* TriangleNodes[] = {
+						&Nodes[Triangle.NodeIndices[0]],
+						&Nodes[Triangle.NodeIndices[1]],
+						&Nodes[Triangle.NodeIndices[2]]
+					};
+
+					for (int32 i = 0; i < 3; ++i)
+					{
+						FMHNode& TriangleNode = *TriangleNodes[i];
+
+						const float VertialLoad = FMath::Max(TriangleNode.Force | Contact.Normal, 0.0f);
+						const FVector FrictionDir = ((TriangleNode.Velocity ^ Contact.Normal) ^ Contact.Normal).GetSafeNormal();
+						const float FrictionStrength = VertialLoad * FRICTION_COEFF;
+
+						TriangleNode.Force += FrictionDir * FrictionStrength;
+					}
 				}
 			}
 		}
