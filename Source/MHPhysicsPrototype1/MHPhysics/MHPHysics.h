@@ -3,7 +3,7 @@
 #include "Math/Vector.h"
 #include "MHPhysics.generated.h"
 
-DECLARE_STATS_GROUP(TEXT("MHPhysics"), STATGROUP_MHPhysics, STATCAT_Advanced);
+DECLARE_STATS_GROUP(TEXT("MHPhysics"), STATGROUP_MHP, STATCAT_Advanced);
 
 USTRUCT()
 struct FMHChunkNode
@@ -67,6 +67,7 @@ struct FMHNode
 	FVector PrevPosition;
 	FVector Velocity;
 	FVector Force;
+	FBox CachedBBox;
 
 	void InitNode(float InMass, const FVector& InPosition)
 	{
@@ -76,6 +77,18 @@ struct FMHNode
 		PrevPosition = Position;
 		Velocity = FVector::ZeroVector;
 		Force = FVector::ZeroVector;
+		CachedBBox.Min = CachedBBox.Max = Position;
+	}
+
+	void UpdateBBox()
+	{
+		CachedBBox.Min.X = FMath::Min(Position.X, PrevPosition.X);
+		CachedBBox.Min.Y = FMath::Min(Position.Y, PrevPosition.Y);
+		CachedBBox.Min.Z = FMath::Min(Position.Z, PrevPosition.Z);
+
+		CachedBBox.Max.X = FMath::Max(Position.X, PrevPosition.X);
+		CachedBBox.Max.Y = FMath::Max(Position.Y, PrevPosition.Y);
+		CachedBBox.Max.Z = FMath::Max(Position.Z, PrevPosition.Z);
 	}
 };
 

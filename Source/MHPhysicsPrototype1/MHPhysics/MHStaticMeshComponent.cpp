@@ -20,7 +20,7 @@
 
 #define LOCTEXT_NAMESPACE "MHStaticMeshComponentDetails"
 
-DECLARE_CYCLE_STAT(TEXT("Update Custom Mesh"), STAT_UpdateCustomMesh, STATGROUP_MHPhysics);
+DECLARE_CYCLE_STAT(TEXT("Update Custom Mesh"), STAT_UpdateCustomMesh, STATGROUP_MHP);
 
 TSharedRef<IDetailCustomization> FMHStaticMeshComponentDetails::MakeInstance()
 {
