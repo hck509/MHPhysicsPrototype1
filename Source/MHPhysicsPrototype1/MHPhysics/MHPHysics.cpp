@@ -516,14 +516,57 @@ void FMHPhysics::Step(float DeltaSeconds)
 				}
 			}
 		}
-		
-		// Adjust position by contact
+
+		// Apply Contact impulses
 		for (const FMHContact& Contact : Contacts)
 		{
 			if (Contact.Type == FMHContact::EType::NodeToTriangle)
 			{
 				FMHNode& Node = Nodes[Contact.NodeToTriangle.NodeIndex];
-				if (Node.Mass != 0.0f)
+				if (Node.Mass > SMALL_NUMBER)
+				{
+					const int32 TriangleIndex = Contact.TriangleIndices[1];
+					const FMHTriangle& Triangle = Triangles[TriangleIndex];
+					FMHNode* TriangleNodes[] = {
+						&Nodes[Triangle.NodeIndices[0]],
+						&Nodes[Triangle.NodeIndices[1]],
+						&Nodes[Triangle.NodeIndices[2]]
+					};
+
+					const float TriangleMass = TriangleNodes[0]->Mass + TriangleNodes[1]->Mass + TriangleNodes[2]->Mass;
+					if (TriangleMass > SMALL_NUMBER)
+					{
+						// Dynamic node to Dynamic triangle
+						const float NodeKineticEnergy = (Node.Velocity | Contact.Normal) * Node.Mass;
+						const float TriangleKineticEnergy = 
+							  (TriangleNodes[0]->Velocity | Contact.Normal) * TriangleNodes[0]->Mass 
+							+ (TriangleNodes[1]->Velocity | Contact.Normal) * TriangleNodes[1]->Mass
+							+ (TriangleNodes[2]->Velocity | Contact.Normal) * TriangleNodes[2]->Mass;
+
+						const float TotalKineticEnergy = NodeKineticEnergy + TriangleKineticEnergy;
+						const float FinalVelocity = TotalKineticEnergy / (Node.Mass + TriangleMass);
+
+						Node.Velocity += (-(Node.Velocity | Contact.Normal) * Contact.Normal) + (FinalVelocity * Contact.Normal);
+						TriangleNodes[0]->Velocity += (-(TriangleNodes[0]->Velocity | Contact.Normal) * Contact.Normal) + (FinalVelocity * Contact.Normal);
+						TriangleNodes[1]->Velocity += (-(TriangleNodes[1]->Velocity | Contact.Normal) * Contact.Normal) + (FinalVelocity * Contact.Normal);
+						TriangleNodes[2]->Velocity += (-(TriangleNodes[2]->Velocity | Contact.Normal) * Contact.Normal) + (FinalVelocity * Contact.Normal);
+					}
+					else
+					{
+						// Dynamic node collide to Static Triangle
+						Node.Velocity -= FMath::Min(Node.Velocity | Contact.Normal, 0.0f) * Contact.Normal;
+					}
+				}
+			}
+		}
+		
+		// Backward position so that there is no penetration
+		for (const FMHContact& Contact : Contacts)
+		{
+			if (Contact.Type == FMHContact::EType::NodeToTriangle)
+			{
+				FMHNode& Node = Nodes[Contact.NodeToTriangle.NodeIndex];
+				if (Node.Mass > SMALL_NUMBER)
 				{
 					{
 						//Node.Position += Contact.Normal * Contact.Depth;
@@ -534,8 +577,8 @@ void FMHPhysics::Step(float DeltaSeconds)
 							FMath::Min(MoveDistance, Contact.Depth / ContactNormalDotMovement) : 0.0f;
 						
 						Node.Position -= Movement.GetSafeNormal() * MoveBackward;
-						Node.Force -= FMath::Min(Node.Force | Contact.Normal, 0.0f) * Contact.Normal;
-						Node.Velocity -= FMath::Min(Node.Velocity | Contact.Normal, 0.0f) * Contact.Normal;
+						//Node.Force -= FMath::Min(Node.Force | Contact.Normal, 0.0f) * Contact.Normal;
+						//Node.Velocity -= FMath::Min(Node.Velocity | Contact.Normal, 0.0f) * Contact.Normal;
 					}
 				}
 
@@ -558,8 +601,8 @@ void FMHPhysics::Step(float DeltaSeconds)
 							FMath::Min(MoveDistance, Contact.Depth / ContactNormalDotMovement) : 0.0f;
 
 						TriangleNodes[i]->Position -= Movement.GetSafeNormal() * MoveBackward;
-						TriangleNodes[i]->Force -= FMath::Max(TriangleNodes[i]->Force | Contact.Normal, 0.0f) * Contact.Normal;
-						TriangleNodes[i]->Velocity -= FMath::Max(TriangleNodes[i]->Velocity | Contact.Normal, 0.0f) * Contact.Normal;
+						//TriangleNodes[i]->Force -= FMath::Max(TriangleNodes[i]->Force | Contact.Normal, 0.0f) * Contact.Normal;
+						//TriangleNodes[i]->Velocity -= FMath::Max(TriangleNodes[i]->Velocity | Contact.Normal, 0.0f) * Contact.Normal;
 					}
 				}
 			}
