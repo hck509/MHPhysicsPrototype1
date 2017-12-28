@@ -474,10 +474,29 @@ void FMHPhysics::Step(float DeltaSeconds)
 		Nodes[Edge.NodeIndices[1]].Force += Speed * Edge.SpringD * Normal;
 	}
 
-	// Adjust position by contact
 	{
 		SCOPE_CYCLE_COUNTER(STAT_CollisionResolve);
 
+		// Add friction forces
+		for (const FMHContact& Contact : Contacts)
+		{
+			if (Contact.Type == FMHContact::EType::NodeToTriangle)
+			{
+				FMHNode& Node = Nodes[Contact.NodeToTriangle.NodeIndex];
+				if (Node.Mass != 0.0f)
+				{
+					const float FRICTION_COEFF = 0.5f; // TODO: parameterize
+
+					const float VertialLoad = FMath::Max(-(Node.Force | Contact.Normal), 0.0f);
+					const FVector FrictionDir = ((Node.Velocity ^ Contact.Normal) ^ Contact.Normal).GetSafeNormal();
+					const float FrictionStrength = VertialLoad * FRICTION_COEFF;
+
+					Node.Force += FrictionDir * FrictionStrength;
+				}
+			}
+		}
+		
+		// Adjust position by contact
 		for (const FMHContact& Contact : Contacts)
 		{
 			if (Contact.Type == FMHContact::EType::NodeToTriangle)
@@ -492,7 +511,7 @@ void FMHPhysics::Step(float DeltaSeconds)
 						const float ContactNormalDotMovement = -(Movement.GetSafeNormal() | Contact.Normal);
 						const float MoveBackward = ContactNormalDotMovement > SMALL_NUMBER ?
 							FMath::Min(MoveDistance, Contact.Depth / ContactNormalDotMovement) : 0.0f;
-
+						
 						Node.Position -= Movement.GetSafeNormal() * MoveBackward;
 						Node.Force -= FMath::Min(Node.Force | Contact.Normal, 0.0f) * Contact.Normal;
 						Node.Velocity -= FMath::Min(Node.Velocity | Contact.Normal, 0.0f) * Contact.Normal;
