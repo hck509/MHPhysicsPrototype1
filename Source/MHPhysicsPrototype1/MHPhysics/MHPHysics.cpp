@@ -32,6 +32,12 @@ static TAutoConsoleVariable<int32> CVarMHPhysicsEnableStaticNodeCollision(
 	TEXT("")
 );
 
+static TAutoConsoleVariable<float> CVarMHPhysicsFrictionCoeff(
+	TEXT("mhp.frictionCoeff"),
+	0.5f,
+	TEXT("")
+);
+
 DECLARE_CYCLE_STAT(TEXT("MHP Tick"), STAT_MHPhysicsTick, STATGROUP_MHP);
 DECLARE_CYCLE_STAT(TEXT("MHP CollisionDetect"), STAT_CollisionDetect, STATGROUP_MHP);
 DECLARE_CYCLE_STAT(TEXT("MHP CD Triangle to Triangle"), STAT_CollisionDetectTriangleToTriangle, STATGROUP_MHP);
@@ -482,7 +488,7 @@ void FMHPhysics::Step(float DeltaSeconds)
 		{
 			if (Contact.Type == FMHContact::EType::NodeToTriangle)
 			{
-				const float FRICTION_COEFF = 0.5f; // TODO: parameterize
+				const float FRICTION_COEFF = CVarMHPhysicsFrictionCoeff.GetValueOnAnyThread(); // TODO: parameterize
 
 				FMHNode& Node = Nodes[Contact.NodeToTriangle.NodeIndex];
 				if (Node.Mass != 0.0f)
@@ -577,7 +583,7 @@ void FMHPhysics::Step(float DeltaSeconds)
 							FMath::Min(MoveDistance, Contact.Depth / ContactNormalDotMovement) : 0.0f;
 						
 						Node.Position -= Movement.GetSafeNormal() * MoveBackward;
-						//Node.Force -= FMath::Min(Node.Force | Contact.Normal, 0.0f) * Contact.Normal;
+						Node.Force -= FMath::Min(Node.Force | Contact.Normal, 0.0f) * Contact.Normal;
 						//Node.Velocity -= FMath::Min(Node.Velocity | Contact.Normal, 0.0f) * Contact.Normal;
 					}
 				}
@@ -601,7 +607,7 @@ void FMHPhysics::Step(float DeltaSeconds)
 							FMath::Min(MoveDistance, Contact.Depth / ContactNormalDotMovement) : 0.0f;
 
 						TriangleNodes[i]->Position -= Movement.GetSafeNormal() * MoveBackward;
-						//TriangleNodes[i]->Force -= FMath::Max(TriangleNodes[i]->Force | Contact.Normal, 0.0f) * Contact.Normal;
+						TriangleNodes[i]->Force -= FMath::Max(TriangleNodes[i]->Force | Contact.Normal, 0.0f) * Contact.Normal;
 						//TriangleNodes[i]->Velocity -= FMath::Max(TriangleNodes[i]->Velocity | Contact.Normal, 0.0f) * Contact.Normal;
 					}
 				}
