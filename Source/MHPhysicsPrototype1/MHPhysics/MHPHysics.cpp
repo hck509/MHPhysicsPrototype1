@@ -134,6 +134,8 @@ FMHMeshInfo FMHPhysics::GenerateFromStaticMesh(const UStaticMesh& Mesh, const FT
 		return NewMeshInfo;
 	}
 
+	const int32 MeshIndex = Meshes.Num();
+
 	NewMeshInfo.NodeIndex = Nodes.Num();
 	NewMeshInfo.EdgeIndex = Edges.Num();
 	NewMeshInfo.TriangleIndex = Triangles.Num();
@@ -149,7 +151,7 @@ FMHMeshInfo FMHPhysics::GenerateFromStaticMesh(const UStaticMesh& Mesh, const FT
 		const FVector Position = Transform.TransformPosition(Resource.PositionVertexBuffer.VertexPosition(VertexIndex));
 
 		FMHNode NewNode;
-		NewNode.InitNode(MassPerNode, Position);
+		NewNode.InitNode(MassPerNode, Position, false, MeshIndex);
 
 		Nodes.Add(NewNode);
 	}
@@ -166,9 +168,11 @@ FMHMeshInfo FMHPhysics::GenerateFromStaticMesh(const UStaticMesh& Mesh, const FT
 
 		FMHTriangle& NewTriangle = Triangles.Last();
 
-		NewTriangle.NodeIndices[0] = NodeOffset + static_cast<int32>(IndexArrayView[Index]);
-		NewTriangle.NodeIndices[1] = NodeOffset + static_cast<int32>(IndexArrayView[Index + 2]);
-		NewTriangle.NodeIndices[2] = NodeOffset + static_cast<int32>(IndexArrayView[Index + 1]);
+		NewTriangle.InitTriangle(
+			NodeOffset + static_cast<int32>(IndexArrayView[Index]),
+			NodeOffset + static_cast<int32>(IndexArrayView[Index + 2]),
+			NodeOffset + static_cast<int32>(IndexArrayView[Index + 1]),
+			MeshIndex);
 
 		NewTriangle.UpdateBBox(Nodes);
 
@@ -187,12 +191,19 @@ FMHMeshInfo FMHPhysics::GenerateFromStaticMesh(const UStaticMesh& Mesh, const FT
 	NewMeshInfo.NumEdges = Edges.Num() - NewMeshInfo.EdgeIndex;
 	NewMeshInfo.NumTriangles = Triangles.Num() - NewMeshInfo.TriangleIndex;
 
+	FMHMesh NewMesh;
+	NewMesh.Info = NewMeshInfo;
+
+	Meshes.Add(NewMesh);
+
 	return NewMeshInfo;
 }
 
 FMHMeshInfo FMHPhysics::GenerateFromChunk(const FMHChunk& Chunk, const FTransform& Transform, float MeshMassInKg, float SpringK, float SpringD)
 {
 	FMHMeshInfo NewMeshInfo;
+
+	const int32 MeshIndex = Meshes.Num();
 
 	NewMeshInfo.NodeIndex = Nodes.Num();
 	NewMeshInfo.EdgeIndex = Edges.Num();
@@ -205,7 +216,7 @@ FMHMeshInfo FMHPhysics::GenerateFromChunk(const FMHChunk& Chunk, const FTransfor
 	for (int32 i = 0; i < NumNodes; ++i)
 	{
 		FMHNode NewNode;
-		NewNode.InitNode(MassPerNode, Transform.TransformPosition(Chunk.Nodes[i].Position));
+		NewNode.InitNode(MassPerNode, Transform.TransformPosition(Chunk.Nodes[i].Position), false, MeshIndex);
 
 		Nodes.Add(NewNode);
 	}
@@ -231,9 +242,11 @@ FMHMeshInfo FMHPhysics::GenerateFromChunk(const FMHChunk& Chunk, const FTransfor
 
 		FMHTriangle& NewTriangle = Triangles.Last();
 
-		NewTriangle.NodeIndices[0] = NodeOffset + Chunk.Triangles[i].NodeIndices[0];
-		NewTriangle.NodeIndices[1] = NodeOffset + Chunk.Triangles[i].NodeIndices[1];
-		NewTriangle.NodeIndices[2] = NodeOffset + Chunk.Triangles[i].NodeIndices[2];
+		NewTriangle.InitTriangle(
+			NodeOffset + Chunk.Triangles[i].NodeIndices[0],
+			NodeOffset + Chunk.Triangles[i].NodeIndices[1],
+			NodeOffset + Chunk.Triangles[i].NodeIndices[2],
+			MeshIndex);
 
 		NewTriangle.UpdateBBox(Nodes);
 	}
@@ -241,6 +254,11 @@ FMHMeshInfo FMHPhysics::GenerateFromChunk(const FMHChunk& Chunk, const FTransfor
 	NewMeshInfo.NumNodes = Nodes.Num() - NewMeshInfo.NodeIndex;
 	NewMeshInfo.NumEdges = Edges.Num() - NewMeshInfo.EdgeIndex;
 	NewMeshInfo.NumTriangles = Triangles.Num() - NewMeshInfo.TriangleIndex;
+
+	FMHMesh NewMesh;
+	NewMesh.Info = NewMeshInfo;
+
+	Meshes.Add(NewMesh);
 
 	return NewMeshInfo;
 }
@@ -357,13 +375,21 @@ static void _DetectCollision(const TArray<FMHNode>& Nodes, const TArray<FMHTrian
 		{
 			const FMHTriangle& Triangle = Triangles[TriangleIndex];
 
+			if (!Node.bSelfCollision && Node.MeshIndex == Triangle.MeshIndex)
+			{
+				// Ignore self collision
+				continue;
+			}
+
 			if (Triangle.HasNodeIndex(NodeIndex))
 			{
+				// Ignore node within same triangle
 				continue;
 			}
 
 			if (!Triangle.CachedBBox.Intersect(Node.CachedBBox))
 			{
+				// Ignore bbox not overlapped
 				continue;
 			}
 
@@ -841,3 +867,22 @@ bool FMHChunk::LoadFromFbx(const FString& Filename)
 }
 
 #endif // WITH_EDITORONLY_DATA
+
+void FMHTriangle::UpdateBBox(const TArray<FMHNode>& Nodes)
+{
+	CachedBBox.Min.X = FMath::Min3(Nodes[NodeIndices[0]].Position.X, Nodes[NodeIndices[1]].Position.X, Nodes[NodeIndices[2]].Position.X);
+	CachedBBox.Min.Y = FMath::Min3(Nodes[NodeIndices[0]].Position.Y, Nodes[NodeIndices[1]].Position.Y, Nodes[NodeIndices[2]].Position.Y);
+	CachedBBox.Min.Z = FMath::Min3(Nodes[NodeIndices[0]].Position.Z, Nodes[NodeIndices[1]].Position.Z, Nodes[NodeIndices[2]].Position.Z);
+
+	CachedBBox.Max.X = FMath::Max3(Nodes[NodeIndices[0]].Position.X, Nodes[NodeIndices[1]].Position.X, Nodes[NodeIndices[2]].Position.X);
+	CachedBBox.Max.Y = FMath::Max3(Nodes[NodeIndices[0]].Position.Y, Nodes[NodeIndices[1]].Position.Y, Nodes[NodeIndices[2]].Position.Y);
+	CachedBBox.Max.Z = FMath::Max3(Nodes[NodeIndices[0]].Position.Z, Nodes[NodeIndices[1]].Position.Z, Nodes[NodeIndices[2]].Position.Z);
+
+	CachedBBox.Min.X = FMath::Min3(FMath::Min(CachedBBox.Min.X, Nodes[NodeIndices[0]].PrevPosition.X), Nodes[NodeIndices[1]].PrevPosition.X, Nodes[NodeIndices[2]].PrevPosition.X);
+	CachedBBox.Min.Y = FMath::Min3(FMath::Min(CachedBBox.Min.Y, Nodes[NodeIndices[0]].PrevPosition.Y), Nodes[NodeIndices[1]].PrevPosition.Y, Nodes[NodeIndices[2]].PrevPosition.Y);
+	CachedBBox.Min.Z = FMath::Min3(FMath::Min(CachedBBox.Min.Z, Nodes[NodeIndices[0]].PrevPosition.Z), Nodes[NodeIndices[1]].PrevPosition.Z, Nodes[NodeIndices[2]].PrevPosition.Z);
+
+	CachedBBox.Max.X = FMath::Max3(FMath::Max(CachedBBox.Max.X, Nodes[NodeIndices[0]].PrevPosition.X), Nodes[NodeIndices[1]].PrevPosition.X, Nodes[NodeIndices[2]].PrevPosition.X);
+	CachedBBox.Max.Y = FMath::Max3(FMath::Max(CachedBBox.Max.Y, Nodes[NodeIndices[0]].PrevPosition.Y), Nodes[NodeIndices[1]].PrevPosition.Y, Nodes[NodeIndices[2]].PrevPosition.Y);
+	CachedBBox.Max.Z = FMath::Max3(FMath::Max(CachedBBox.Max.Z, Nodes[NodeIndices[0]].PrevPosition.Z), Nodes[NodeIndices[1]].PrevPosition.Z, Nodes[NodeIndices[2]].PrevPosition.Z);
+}

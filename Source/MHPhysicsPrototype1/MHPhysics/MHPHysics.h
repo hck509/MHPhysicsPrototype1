@@ -63,16 +63,21 @@ struct FMHNode
 	float Mass;
 	FVector Position;
 
+	bool bSelfCollision : 1;
+	int32 MeshIndex;
+
 	// Intermediate Data
 	FVector PrevPosition;
 	FVector Velocity;
 	FVector Force;
 	FBox CachedBBox;
 
-	void InitNode(float InMass, const FVector& InPosition)
+	void InitNode(float InMass, const FVector& InPosition, bool bInSelfCollision, int32 InMeshIndex)
 	{
 		Mass = InMass;
 		Position = InPosition;
+		bSelfCollision = bInSelfCollision;
+		MeshIndex = InMeshIndex;
 
 		PrevPosition = Position;
 		Velocity = FVector::ZeroVector;
@@ -104,6 +109,7 @@ struct FMHEdge
 struct FMHTriangle
 {
 	int32 NodeIndices[3];
+	int32 MeshIndex;
 
 	enum ECacheBitFlags
 	{
@@ -122,24 +128,17 @@ struct FMHTriangle
 		CacheFlags = 0;
 	}
 
-	void UpdateBBox(const TArray<FMHNode>& Nodes)
+	void InitTriangle(int32 NodeIndex0, int32 NodeIndex1, int32 NodeIndex2, int32 InMeshIndex)
 	{
-		CachedBBox.Min.X = FMath::Min3(Nodes[NodeIndices[0]].Position.X, Nodes[NodeIndices[1]].Position.X, Nodes[NodeIndices[2]].Position.X);
-		CachedBBox.Min.Y = FMath::Min3(Nodes[NodeIndices[0]].Position.Y, Nodes[NodeIndices[1]].Position.Y, Nodes[NodeIndices[2]].Position.Y);
-		CachedBBox.Min.Z = FMath::Min3(Nodes[NodeIndices[0]].Position.Z, Nodes[NodeIndices[1]].Position.Z, Nodes[NodeIndices[2]].Position.Z);
+		NodeIndices[0] = NodeIndex0;
+		NodeIndices[1] = NodeIndex1;
+		NodeIndices[2] = NodeIndex2;
+		MeshIndex = InMeshIndex;
 
-		CachedBBox.Max.X = FMath::Max3(Nodes[NodeIndices[0]].Position.X, Nodes[NodeIndices[1]].Position.X, Nodes[NodeIndices[2]].Position.X);
-		CachedBBox.Max.Y = FMath::Max3(Nodes[NodeIndices[0]].Position.Y, Nodes[NodeIndices[1]].Position.Y, Nodes[NodeIndices[2]].Position.Y);
-		CachedBBox.Max.Z = FMath::Max3(Nodes[NodeIndices[0]].Position.Z, Nodes[NodeIndices[1]].Position.Z, Nodes[NodeIndices[2]].Position.Z);
-
-		CachedBBox.Min.X = FMath::Min3(FMath::Min(CachedBBox.Min.X, Nodes[NodeIndices[0]].PrevPosition.X), Nodes[NodeIndices[1]].PrevPosition.X, Nodes[NodeIndices[2]].PrevPosition.X);
-		CachedBBox.Min.Y = FMath::Min3(FMath::Min(CachedBBox.Min.Y, Nodes[NodeIndices[0]].PrevPosition.Y), Nodes[NodeIndices[1]].PrevPosition.Y, Nodes[NodeIndices[2]].PrevPosition.Y);
-		CachedBBox.Min.Z = FMath::Min3(FMath::Min(CachedBBox.Min.Z, Nodes[NodeIndices[0]].PrevPosition.Z), Nodes[NodeIndices[1]].PrevPosition.Z, Nodes[NodeIndices[2]].PrevPosition.Z);
-
-		CachedBBox.Max.X = FMath::Max3(FMath::Max(CachedBBox.Max.X, Nodes[NodeIndices[0]].PrevPosition.X), Nodes[NodeIndices[1]].PrevPosition.X, Nodes[NodeIndices[2]].PrevPosition.X);
-		CachedBBox.Max.Y = FMath::Max3(FMath::Max(CachedBBox.Max.Y, Nodes[NodeIndices[0]].PrevPosition.Y), Nodes[NodeIndices[1]].PrevPosition.Y, Nodes[NodeIndices[2]].PrevPosition.Y);
-		CachedBBox.Max.Z = FMath::Max3(FMath::Max(CachedBBox.Max.Z, Nodes[NodeIndices[0]].PrevPosition.Z), Nodes[NodeIndices[1]].PrevPosition.Z, Nodes[NodeIndices[2]].PrevPosition.Z);
+		CacheFlags = 0;
 	}
+
+	void UpdateBBox(const TArray<FMHNode>& Nodes);
 
 	bool HasNodeIndex(int32 NodeIndex) const
 	{
@@ -167,6 +166,11 @@ struct FMHMeshInfo
 		TriangleIndex = 0;
 		NumTriangles = 0;
 	}
+};
+
+struct FMHMesh
+{
+	FMHMeshInfo Info;
 };
 
 struct FMHContact
@@ -226,7 +230,9 @@ private:
 	TArray<FMHNode> Nodes;
 	TArray<FMHEdge> Edges;
 	TArray<FMHTriangle> Triangles;
+	TArray<FMHMesh> Meshes;
 
+	// Intermediate State
 	TArray<FMHContact> Contacts;
 
 	float TickSecondLeft;
