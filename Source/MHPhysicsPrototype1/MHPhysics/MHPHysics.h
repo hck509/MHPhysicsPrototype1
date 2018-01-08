@@ -82,6 +82,7 @@ struct FMHNode
 		PrevPosition = Position;
 		Velocity = FVector::ZeroVector;
 		Force = FVector::ZeroVector;
+		CachedBBox.IsValid = 1;
 		CachedBBox.Min = CachedBBox.Max = Position;
 	}
 

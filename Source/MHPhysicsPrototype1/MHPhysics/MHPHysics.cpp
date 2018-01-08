@@ -39,10 +39,16 @@ static TAutoConsoleVariable<float> CVarMHPhysicsFrictionCoeff(
 );
 
 DECLARE_CYCLE_STAT(TEXT("MHP Tick"), STAT_MHPhysicsTick, STATGROUP_MHP);
+DECLARE_CYCLE_STAT(TEXT("MHP Step"), STAT_MHPhysicsStep, STATGROUP_MHP);
 DECLARE_CYCLE_STAT(TEXT("MHP CollisionDetect"), STAT_CollisionDetect, STATGROUP_MHP);
 DECLARE_CYCLE_STAT(TEXT("MHP CD Triangle to Triangle"), STAT_CollisionDetectTriangleToTriangle, STATGROUP_MHP);
 DECLARE_CYCLE_STAT(TEXT("MHP CD Node to Triangle"), STAT_CollisionDetectNodeToTriangle, STATGROUP_MHP);
+DECLARE_CYCLE_STAT(TEXT("MHP Gravity"), STAT_Gravity, STATGROUP_MHP);
+DECLARE_CYCLE_STAT(TEXT("MHP Edge Spring"), STAT_EdgeSpring, STATGROUP_MHP);
 DECLARE_CYCLE_STAT(TEXT("MHP CollisionResolve"), STAT_CollisionResolve, STATGROUP_MHP);
+DECLARE_CYCLE_STAT(TEXT("MHP Integration"), STAT_Integration, STATGROUP_MHP);
+DECLARE_CYCLE_STAT(TEXT("MHP UpdateNodeBBox"), STAT_UpdateNodeBBox, STATGROUP_MHP);
+DECLARE_CYCLE_STAT(TEXT("MHP UpdateTriangleBBox"), STAT_UpdateTriangleBBox, STATGROUP_MHP);
 DECLARE_CYCLE_STAT(TEXT("MHP Draw"), STAT_Draw, STATGROUP_MHP);
 
 static bool _RayTriangleIntersect(
@@ -474,36 +480,42 @@ void FMHPhysics::Tick(float DeltaSeconds)
 
 void FMHPhysics::Step(float DeltaSeconds)
 {
+	SCOPE_CYCLE_COUNTER(STAT_MHPhysicsStep);
+
 	DeltaSeconds = FMath::Clamp(DeltaSeconds, 0.0f, 0.01f);
 
 	Contacts.Reset();
 
 	_DetectCollision(Nodes, Triangles, Contacts);
 
-	// Apply gravity
-	for (FMHNode& Node : Nodes)
 	{
-		Node.Force = Node.Mass * Setting.Gravity;
+		SCOPE_CYCLE_COUNTER(STAT_Gravity);
+
+		// Apply gravity
+		for (FMHNode& Node : Nodes)
+		{
+			Node.Force = Node.Mass * Setting.Gravity;
+		}
 	}
 
-	// Apply spring force
-	for (FMHEdge& Edge : Edges)
 	{
-		const FVector Positions[2] = {
-			Nodes[Edge.NodeIndices[0]].Position,
-			Nodes[Edge.NodeIndices[1]].Position
-		};
+		SCOPE_CYCLE_COUNTER(STAT_EdgeSpring);
 
-		const FVector PositionDiff = Nodes[Edge.NodeIndices[0]].Position - Nodes[Edge.NodeIndices[1]].Position;
-		const FVector VelocityDiff = Nodes[Edge.NodeIndices[0]].Velocity - Nodes[Edge.NodeIndices[1]].Velocity;
-		const float Distance = PositionDiff.Size();
-		const FVector Normal = (Distance > SMALL_NUMBER) ? PositionDiff / Distance : FVector::ZeroVector;
-		const float Speed = VelocityDiff | Normal;
+		// Apply spring force
+		for (FMHEdge& Edge : Edges)
+		{
+			const FVector PositionDiff = Nodes[Edge.NodeIndices[0]].Position - Nodes[Edge.NodeIndices[1]].Position;
+			const FVector VelocityDiff = Nodes[Edge.NodeIndices[0]].Velocity - Nodes[Edge.NodeIndices[1]].Velocity;
+			const float Distance = PositionDiff.Size();
+			const FVector Normal = (Distance > SMALL_NUMBER) ? PositionDiff / Distance : FVector::ZeroVector;
+			const float Speed = VelocityDiff | Normal;
 
-		Nodes[Edge.NodeIndices[0]].Force -= (Distance - Edge.DefaultLength) * Edge.SpringK * Normal;
-		Nodes[Edge.NodeIndices[0]].Force -= Speed * Edge.SpringD * Normal;
-		Nodes[Edge.NodeIndices[1]].Force += (Distance - Edge.DefaultLength) * Edge.SpringK * Normal;
-		Nodes[Edge.NodeIndices[1]].Force += Speed * Edge.SpringD * Normal;
+			const FVector ForceByK = (Distance - Edge.DefaultLength) * Edge.SpringK * Normal;
+			const FVector ForceByD = Speed * Edge.SpringD * Normal;
+
+			Nodes[Edge.NodeIndices[0]].Force -= ForceByK + ForceByD;
+			Nodes[Edge.NodeIndices[1]].Force += ForceByK + ForceByD;
+		}
 	}
 
 	{
@@ -647,35 +659,47 @@ void FMHPhysics::Step(float DeltaSeconds)
 		Node.PrevPosition = Node.Position;
 	}
 
-	// Euler Integration
-	for (FMHNode& Node : Nodes)
 	{
-		FVector Acceleration = Node.Mass > SMALL_NUMBER ? Node.Force / Node.Mass : FVector::ZeroVector;
-		FVector AddVelocity = Acceleration * DeltaSeconds;
-		Node.Position += (Node.Velocity + (AddVelocity * 0.5f)) * DeltaSeconds;
-		Node.Velocity += AddVelocity;
+		SCOPE_CYCLE_COUNTER(STAT_Integration);
+
+		// Euler Integration
+		for (FMHNode& Node : Nodes)
+		{
+			FVector Acceleration = Node.Mass > SMALL_NUMBER ? Node.Force / Node.Mass : FVector::ZeroVector;
+			FVector AddVelocity = Acceleration * DeltaSeconds;
+			Node.Position += (Node.Velocity + (AddVelocity * 0.5f)) * DeltaSeconds;
+			Node.Velocity += AddVelocity;
+		}
 	}
 
-	// Update Caches
-	for (FMHNode& Node : Nodes)
 	{
-		Node.UpdateBBox();
+		SCOPE_CYCLE_COUNTER(STAT_UpdateNodeBBox);
+
+		// Update Caches
+		for (FMHNode& Node : Nodes)
+		{
+			Node.UpdateBBox();
+		}
 	}
 
-	for (FMHTriangle& Triangle : Triangles)
 	{
-		if (Triangle.CacheFlags & FMHTriangle::ValidPlane)
-		{
-			Triangle.CachedPrevPlane = Triangle.CachedPlane;
-			Triangle.CacheFlags &= ~FMHTriangle::ValidPlane;
-			Triangle.CacheFlags |= FMHTriangle::ValidPrevPlane;
-		}
-		else
-		{
-			Triangle.CacheFlags &= ~FMHTriangle::ValidPrevPlane;
-		}
+		SCOPE_CYCLE_COUNTER(STAT_UpdateTriangleBBox);
 
-		Triangle.UpdateBBox(Nodes);
+		for (FMHTriangle& Triangle : Triangles)
+		{
+			if (Triangle.CacheFlags & FMHTriangle::ValidPlane)
+			{
+				Triangle.CachedPrevPlane = Triangle.CachedPlane;
+				Triangle.CacheFlags &= ~FMHTriangle::ValidPlane;
+				Triangle.CacheFlags |= FMHTriangle::ValidPrevPlane;
+			}
+			else
+			{
+				Triangle.CacheFlags &= ~FMHTriangle::ValidPrevPlane;
+			}
+
+			Triangle.UpdateBBox(Nodes);
+		}
 	}
 }
 
@@ -870,19 +894,7 @@ bool FMHChunk::LoadFromFbx(const FString& Filename)
 
 void FMHTriangle::UpdateBBox(const TArray<FMHNode>& Nodes)
 {
-	CachedBBox.Min.X = FMath::Min3(Nodes[NodeIndices[0]].Position.X, Nodes[NodeIndices[1]].Position.X, Nodes[NodeIndices[2]].Position.X);
-	CachedBBox.Min.Y = FMath::Min3(Nodes[NodeIndices[0]].Position.Y, Nodes[NodeIndices[1]].Position.Y, Nodes[NodeIndices[2]].Position.Y);
-	CachedBBox.Min.Z = FMath::Min3(Nodes[NodeIndices[0]].Position.Z, Nodes[NodeIndices[1]].Position.Z, Nodes[NodeIndices[2]].Position.Z);
-
-	CachedBBox.Max.X = FMath::Max3(Nodes[NodeIndices[0]].Position.X, Nodes[NodeIndices[1]].Position.X, Nodes[NodeIndices[2]].Position.X);
-	CachedBBox.Max.Y = FMath::Max3(Nodes[NodeIndices[0]].Position.Y, Nodes[NodeIndices[1]].Position.Y, Nodes[NodeIndices[2]].Position.Y);
-	CachedBBox.Max.Z = FMath::Max3(Nodes[NodeIndices[0]].Position.Z, Nodes[NodeIndices[1]].Position.Z, Nodes[NodeIndices[2]].Position.Z);
-
-	CachedBBox.Min.X = FMath::Min3(FMath::Min(CachedBBox.Min.X, Nodes[NodeIndices[0]].PrevPosition.X), Nodes[NodeIndices[1]].PrevPosition.X, Nodes[NodeIndices[2]].PrevPosition.X);
-	CachedBBox.Min.Y = FMath::Min3(FMath::Min(CachedBBox.Min.Y, Nodes[NodeIndices[0]].PrevPosition.Y), Nodes[NodeIndices[1]].PrevPosition.Y, Nodes[NodeIndices[2]].PrevPosition.Y);
-	CachedBBox.Min.Z = FMath::Min3(FMath::Min(CachedBBox.Min.Z, Nodes[NodeIndices[0]].PrevPosition.Z), Nodes[NodeIndices[1]].PrevPosition.Z, Nodes[NodeIndices[2]].PrevPosition.Z);
-
-	CachedBBox.Max.X = FMath::Max3(FMath::Max(CachedBBox.Max.X, Nodes[NodeIndices[0]].PrevPosition.X), Nodes[NodeIndices[1]].PrevPosition.X, Nodes[NodeIndices[2]].PrevPosition.X);
-	CachedBBox.Max.Y = FMath::Max3(FMath::Max(CachedBBox.Max.Y, Nodes[NodeIndices[0]].PrevPosition.Y), Nodes[NodeIndices[1]].PrevPosition.Y, Nodes[NodeIndices[2]].PrevPosition.Y);
-	CachedBBox.Max.Z = FMath::Max3(FMath::Max(CachedBBox.Max.Z, Nodes[NodeIndices[0]].PrevPosition.Z), Nodes[NodeIndices[1]].PrevPosition.Z, Nodes[NodeIndices[2]].PrevPosition.Z);
+	CachedBBox = Nodes[NodeIndices[0]].CachedBBox;
+	CachedBBox += Nodes[NodeIndices[1]].CachedBBox;
+	CachedBBox += Nodes[NodeIndices[2]].CachedBBox;
 }

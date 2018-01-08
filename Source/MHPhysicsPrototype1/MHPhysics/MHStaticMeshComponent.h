@@ -33,6 +33,7 @@ public:
 
 #if WITH_EDITORONLY_DATA
 	void ImportFBX();
+	void Reimport();
 #endif
 		
 private:
@@ -61,6 +62,11 @@ private:
 	FMHChunk MHChunk;
 
 	FMHMeshInfo MHMeshInfo;
+
+#if WITH_EDITORONLY_DATA
+	UPROPERTY()
+	FString SourceFilePath;
+#endif
 };
 
 #if WITH_EDITORONLY_DATA
@@ -76,6 +82,7 @@ private:
 	virtual void CustomizeDetails(IDetailLayoutBuilder& DetailLayout) override;
 
 	FReply ImportFBX();
+	FReply Reimport();
 
 private:
 	TArray<TWeakObjectPtr<UMHStaticMeshComponent>> Components;

@@ -62,22 +62,47 @@ void FMHStaticMeshComponentDetails::CustomizeDetails(IDetailLayoutBuilder& Detai
 		[
 			SNullWidget::NullWidget
 		]
-	.ValueContent()
+		.ValueContent()
 		[
 			SNew(SBox)
 			.WidthOverride(125)
+			[
+				SNew(SButton)
+				.ContentPadding(3)
+				.VAlign(VAlign_Center)
+				.HAlign(HAlign_Center)
+				.OnClicked(this, &FMHStaticMeshComponentDetails::ImportFBX)
+				[
+					SNew(STextBlock)
+					.Text(NSLOCTEXT("CombatCameraComponentDetails", "Import FBX", "Import FBX"))
+					.Font(IDetailLayoutBuilder::GetDetailFont())
+				]
+			]
+		];
+
+
+	DetailLayout.EditCategory("MHPhysics")
+		.AddCustomRow(NSLOCTEXT("MHStaticMeshComponentDetails", "Reimport", "Reimport"))
+		.NameContent()
 		[
-			SNew(SButton)
-			.ContentPadding(3)
-		.VAlign(VAlign_Center)
-		.HAlign(HAlign_Center)
-		.OnClicked(this, &FMHStaticMeshComponentDetails::ImportFBX)
+			SNullWidget::NullWidget
+		]
+		.ValueContent()
 		[
-			SNew(STextBlock)
-			.Text(NSLOCTEXT("CombatCameraComponentDetails", "Import FBX", "Import FBX"))
-		.Font(IDetailLayoutBuilder::GetDetailFont())
-		]
-		]
+			SNew(SBox)
+			.WidthOverride(125)
+			[
+				SNew(SButton)
+				.ContentPadding(3)
+				.VAlign(VAlign_Center)
+				.HAlign(HAlign_Center)
+				.OnClicked(this, &FMHStaticMeshComponentDetails::Reimport)
+				[
+					SNew(STextBlock)
+					.Text(NSLOCTEXT("CombatCameraComponentDetails", "Reimport", "Reimport"))
+					.Font(IDetailLayoutBuilder::GetDetailFont())
+				]
+			]
 		];
 }
 
@@ -88,6 +113,19 @@ FReply FMHStaticMeshComponentDetails::ImportFBX()
 		if (Component.IsValid())
 		{
 			Component->ImportFBX();
+		}
+	}
+
+	return FReply::Handled();
+}
+
+FReply FMHStaticMeshComponentDetails::Reimport()
+{
+	for (auto& Component : Components)
+	{
+		if (Component.IsValid())
+		{
+			Component->Reimport();
 		}
 	}
 
@@ -276,9 +314,22 @@ void UMHStaticMeshComponent::ImportFBX()
 
 		if (bOpen && OpenFilenames.Num() > 0)
 		{
-			MHChunk.LoadFromFbx(OpenFilenames[0]);
+			bool bSuccess = MHChunk.LoadFromFbx(OpenFilenames[0]);
+			if (bSuccess)
+			{
+				SourceFilePath = OpenFilenames[0];
+
+				InitializeFromChunk();
+			}
 		}
 	}
+}
+
+void UMHStaticMeshComponent::Reimport()
+{
+	MHChunk.LoadFromFbx(SourceFilePath);
+
+	InitializeFromChunk();
 }
 
 #endif // WITH_EDITORONLY_DATA
