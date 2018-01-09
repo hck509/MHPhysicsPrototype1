@@ -786,14 +786,78 @@ void FMHPhysics::DebugDraw(UWorld* World)
 
 #if WITH_EDITOR
 
+// reference : FFbxDataConverter::ConvertPos
 FVector _ConvertFbxPos(FbxVector4 Vector)
 {
 	FVector Out;
-	Out[0] = Vector[0] * 100.0f;
+	Out[0] = Vector[0];
 	// flip Y, then the right-handed axis system is converted to LHS
-	Out[1] = -Vector[1] * 100.0f;
-	Out[2] = Vector[2] * 100.0f;
+	Out[1] = -Vector[1];
+	Out[2] = Vector[2];
 	return Out;
+}
+
+static void _FillFbxNodes(FbxNode* Node, TArray<FbxNode*>& OutNodes)
+{
+	OutNodes.Add(Node);
+
+	const FString NodeName = Node->GetName();
+
+	FbxNodeAttribute::EType FbxNodeAttributeType = Node->GetNodeAttribute() ? 
+		Node->GetNodeAttribute()->GetAttributeType() : FbxNodeAttribute::eUnknown;
+
+	if (FbxNodeAttributeType == FbxNodeAttribute::eNull)
+	{
+		FbxDouble3 Translation = Node->LclTranslation.Get();
+	}
+
+	for (int32 ChildIndex = 0; ChildIndex < Node->GetChildCount(); ++ChildIndex)
+	{
+		_FillFbxNodes(Node->GetChild(ChildIndex), OutNodes);
+	}
+}
+
+// reference: FFbxImporter::ComputeTotalMatrix
+static FbxAMatrix _ComputeTotalMatrix(FbxScene* Scene, FbxNode* Node)
+{
+	FbxAMatrix Geometry;
+	FbxVector4 Translation, Rotation, Scaling;
+	Translation = Node->GetGeometricTranslation(FbxNode::eSourcePivot);
+	Rotation = Node->GetGeometricRotation(FbxNode::eSourcePivot);
+	Scaling = Node->GetGeometricScaling(FbxNode::eSourcePivot);
+	Geometry.SetT(Translation);
+	Geometry.SetR(Rotation);
+	Geometry.SetS(Scaling);
+
+	//For Single Matrix situation, obtain transfrom matrix from eDESTINATION_SET, which include pivot offsets and pre/post rotations.
+	FbxAMatrix& GlobalTransform = Scene->GetAnimationEvaluator()->GetNodeGlobalTransform(Node);
+
+	const bool bTransformVertexToAbsolute = true;
+
+	//We can bake the pivot only if we don't transform the vertex to the absolute position
+	if (!bTransformVertexToAbsolute)
+	{
+		//if (ImportOptions->bBakePivotInVertex)
+		//{
+		//	FbxAMatrix PivotGeometry;
+		//	FbxVector4 RotationPivot = Node->GetRotationPivot(FbxNode::eSourcePivot);
+		//	FbxVector4 FullPivot;
+		//	FullPivot[0] = -RotationPivot[0];
+		//	FullPivot[1] = -RotationPivot[1];
+		//	FullPivot[2] = -RotationPivot[2];
+		//	PivotGeometry.SetT(FullPivot);
+		//	Geometry = Geometry * PivotGeometry;
+		//}
+		//else
+		{
+			//No Vertex transform and no bake pivot, it will be the mesh as-is.
+			Geometry.SetIdentity();
+		}
+	}
+	//We must always add the geometric transform. Only Max use the geometric transform which is an offset to the local transform of the node
+	FbxAMatrix TotalMatrix = bTransformVertexToAbsolute ? GlobalTransform * Geometry : Geometry;
+
+	return TotalMatrix;
 }
 
 bool FMHChunk::LoadFromFbx(const FString& Filename)
@@ -807,8 +871,10 @@ bool FMHChunk::LoadFromFbx(const FString& Filename)
 		return false;
 	}
 
+	TArray<FbxNode*> FbxNodes;
+	_FillFbxNodes(FFbxImporter->Scene->GetRootNode(), FbxNodes);
+	
 	TArray<FbxNode*> FbxMeshArray;
-
 	FFbxImporter->FillFbxMeshArray(FFbxImporter->Scene->GetRootNode(), FbxMeshArray, FFbxImporter);
 
 	for (FbxNode* Node : FbxMeshArray)
@@ -816,11 +882,16 @@ bool FMHChunk::LoadFromFbx(const FString& Filename)
 		FbxMesh* Mesh = Node->GetMesh();
 		check(Mesh);
 
+		// Construct the matrices for the conversion from right handed to left handed system
+		FbxAMatrix TotalMatrix;
+		TotalMatrix = _ComputeTotalMatrix(FFbxImporter->Scene, Node);
+
 		int32 NumVertices = Mesh->GetControlPointsCount();
 
 		for (int32 i = 0; i < NumVertices; ++i)
 		{
-			const FbxVector4& FbxPosition = Mesh->GetControlPoints()[i];
+			FbxVector4 FbxPosition = Mesh->GetControlPoints()[i];
+			FbxPosition = TotalMatrix.MultT(FbxPosition);
 
 			Nodes.Add(FMHChunkNode({ _ConvertFbxPos(FbxPosition) }));
 		}
