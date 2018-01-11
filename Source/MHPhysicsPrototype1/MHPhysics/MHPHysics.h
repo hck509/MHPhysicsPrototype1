@@ -33,6 +33,18 @@ struct FMHChunkTriangle
 };
 
 USTRUCT()
+struct FMHChunkDrive
+{
+	GENERATED_BODY()
+
+	UPROPERTY()
+	FString Name;
+
+	UPROPERTY()
+	int32 NodeIndices[2];
+};
+
+USTRUCT()
 struct FMHChunk
 {
 	GENERATED_BODY()
@@ -46,11 +58,15 @@ struct FMHChunk
 	UPROPERTY()
 	TArray<FMHChunkTriangle> Triangles;
 
+	UPROPERTY()
+	TArray<FMHChunkDrive> Drives;
+
 	void Clear()
 	{
 		Nodes.Empty();
 		Edges.Empty();
 		Triangles.Empty();
+		Drives.Empty();
 	}
 
 #if WITH_EDITORONLY_DATA
@@ -147,6 +163,12 @@ struct FMHTriangle
 	}
 };
 
+struct FMHDrive
+{
+	FString Name;
+	int32 NodeIndices[2];
+};
+
 struct FMHMeshInfo
 {
 	int32 NodeIndex;
@@ -232,6 +254,7 @@ private:
 	TArray<FMHEdge> Edges;
 	TArray<FMHTriangle> Triangles;
 	TArray<FMHMesh> Meshes;
+	TArray<FMHDrive> Drives;
 
 	// Intermediate State
 	TArray<FMHContact> Contacts;

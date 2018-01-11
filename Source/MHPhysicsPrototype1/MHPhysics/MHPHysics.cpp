@@ -257,6 +257,16 @@ FMHMeshInfo FMHPhysics::GenerateFromChunk(const FMHChunk& Chunk, const FTransfor
 		NewTriangle.UpdateBBox(Nodes);
 	}
 
+	for (const FMHChunkDrive& Drive : Chunk.Drives)
+	{
+		Drives.AddDefaulted(1);
+
+		FMHDrive& NewDrive = Drives.Last();
+		NewDrive.Name = Drive.Name;
+		NewDrive.NodeIndices[0] = NodeOffset + Drive.NodeIndices[0];
+		NewDrive.NodeIndices[1] = NodeOffset + Drive.NodeIndices[1];
+	}
+
 	NewMeshInfo.NumNodes = Nodes.Num() - NewMeshInfo.NodeIndex;
 	NewMeshInfo.NumEdges = Edges.Num() - NewMeshInfo.EdgeIndex;
 	NewMeshInfo.NumTriangles = Triangles.Num() - NewMeshInfo.TriangleIndex;
@@ -776,6 +786,22 @@ void FMHPhysics::DebugDraw(UWorld* World)
 		//	Center + (FVector(Plane) * 30.0f), 5.0f, FColor::White, false, -1.0f, 1, 2.0f);
 	}
 
+	for (const FMHDrive& Drive : Drives)
+	{
+		FVector Location = Nodes[Drive.NodeIndices[0]].Position;
+		FString Name = Drive.Name + TEXT("_0");
+
+		::DrawDebugString(World, Nodes[Drive.NodeIndices[0]].Position, Drive.Name + TEXT("_0"), nullptr, FColor::Green, 0.0f);
+		::DrawDebugString(World, Nodes[Drive.NodeIndices[1]].Position, Drive.Name + TEXT("_1"), nullptr, FColor::Green, 0.0f);
+
+		::DrawDebugPoint(World, Nodes[Drive.NodeIndices[0]].Position, 10.0f, FColor::Green, false, 0);
+		::DrawDebugPoint(World, Nodes[Drive.NodeIndices[1]].Position, 10.0f, FColor::Green, false, 0);
+
+		::DrawDebugLine(World,
+			Nodes[Drive.NodeIndices[0]].Position,
+			Nodes[Drive.NodeIndices[1]].Position, FColor::Green, false, 0);
+	}
+
 	for (const FMHContact& Contact : Contacts)
 	{
 		::DrawDebugPoint(World, Nodes[Contact.NodeToTriangle.NodeIndex].Position, 10.0f, FColor::Red, false, 0);
@@ -797,23 +823,19 @@ FVector _ConvertFbxPos(FbxVector4 Vector)
 	return Out;
 }
 
-static void _FillFbxNodes(FbxNode* Node, TArray<FbxNode*>& OutNodes)
+static void _FillFbxNodes(FbxNode* Node, FbxNodeAttribute::EType Type, TArray<FbxNode*>& OutNodes)
 {
-	OutNodes.Add(Node);
-
-	const FString NodeName = Node->GetName();
-
 	FbxNodeAttribute::EType FbxNodeAttributeType = Node->GetNodeAttribute() ? 
 		Node->GetNodeAttribute()->GetAttributeType() : FbxNodeAttribute::eUnknown;
 
-	if (FbxNodeAttributeType == FbxNodeAttribute::eNull)
+	if (FbxNodeAttributeType == Type)
 	{
-		FbxDouble3 Translation = Node->LclTranslation.Get();
+		OutNodes.Add(Node);
 	}
 
 	for (int32 ChildIndex = 0; ChildIndex < Node->GetChildCount(); ++ChildIndex)
 	{
-		_FillFbxNodes(Node->GetChild(ChildIndex), OutNodes);
+		_FillFbxNodes(Node->GetChild(ChildIndex), Type, OutNodes);
 	}
 }
 
@@ -871,8 +893,9 @@ bool FMHChunk::LoadFromFbx(const FString& Filename)
 		return false;
 	}
 
-	TArray<FbxNode*> FbxNodes;
-	_FillFbxNodes(FFbxImporter->Scene->GetRootNode(), FbxNodes);
+	TArray<FbxNode*> FbxNullNodes;
+	_FillFbxNodes(FFbxImporter->Scene->GetRootNode(), FbxNodeAttribute::eNull, FbxNullNodes);
+
 	
 	TArray<FbxNode*> FbxMeshArray;
 	FFbxImporter->FillFbxMeshArray(FFbxImporter->Scene->GetRootNode(), FbxMeshArray, FFbxImporter);
@@ -883,8 +906,7 @@ bool FMHChunk::LoadFromFbx(const FString& Filename)
 		check(Mesh);
 
 		// Construct the matrices for the conversion from right handed to left handed system
-		FbxAMatrix TotalMatrix;
-		TotalMatrix = _ComputeTotalMatrix(FFbxImporter->Scene, Node);
+		FbxAMatrix TotalMatrix = _ComputeTotalMatrix(FFbxImporter->Scene, Node);
 
 		int32 NumVertices = Mesh->GetControlPointsCount();
 
@@ -958,6 +980,56 @@ bool FMHChunk::LoadFromFbx(const FString& Filename)
 			}
 		}
 	}
+
+	const static float NODE_SEARCH_DISTANCE_SQUARED = FMath::Square(0.01f);
+
+	struct FNullNode
+	{
+		FString Name;
+		int32 NodeIndex;
+	};
+	TArray<FNullNode> NullNodes;
+
+	for (FbxNode* NullNode : FbxNullNodes)
+	{
+		FbxAMatrix TotalMatrix = _ComputeTotalMatrix(FFbxImporter->Scene, NullNode);
+		FVector Location = _ConvertFbxPos(TotalMatrix.MultT(FbxVector4(0, 0, 0)));
+
+		for (int32 NodeIndex = 0; NodeIndex < Nodes.Num(); ++NodeIndex)
+		{
+			const FMHChunkNode& ChunkNode = Nodes[NodeIndex];
+
+			if ((ChunkNode.Position - Location).SizeSquared() < NODE_SEARCH_DISTANCE_SQUARED)
+			{
+				FString Name = NullNode->GetName();
+				NullNodes.Add(FNullNode({ Name, NodeIndex }));
+				break;
+			}
+		}
+	}
+
+	// Look for Drives
+	for (const FNullNode& NullNode : NullNodes)
+	{
+		if (NullNode.Name.StartsWith(TEXT("__DRIVE0")))
+		{
+			FString PairName = NullNode.Name.Replace(TEXT("__DRIVE0_"), TEXT("__DRIVE1_"));
+			FNullNode* PairNode = NullNodes.FindByPredicate([PairName](const FNullNode& Node) {
+				return Node.Name == PairName;
+			});
+
+			if (PairNode)
+			{
+				FMHChunkDrive Drive;
+				Drive.Name = NullNode.Name.Replace(TEXT("__DRIVE0_"), TEXT(""));
+				Drive.NodeIndices[0] = NullNode.NodeIndex;
+				Drive.NodeIndices[1] = PairNode->NodeIndex;
+				Drives.Add(Drive);
+			}
+		}
+	}
+
+
 	return true;
 }
 
