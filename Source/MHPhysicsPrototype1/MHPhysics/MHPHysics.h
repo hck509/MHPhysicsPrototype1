@@ -167,6 +167,7 @@ struct FMHDrive
 {
 	FString Name;
 	int32 NodeIndices[2];
+	TArray<int32> TorqueNodeIndices[2];
 };
 
 struct FMHMeshInfo

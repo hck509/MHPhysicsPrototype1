@@ -265,6 +265,56 @@ FMHMeshInfo FMHPhysics::GenerateFromChunk(const FMHChunk& Chunk, const FTransfor
 		NewDrive.Name = Drive.Name;
 		NewDrive.NodeIndices[0] = NodeOffset + Drive.NodeIndices[0];
 		NewDrive.NodeIndices[1] = NodeOffset + Drive.NodeIndices[1];
+
+		TArray<int32> Drive0EdgedNodes;
+		TArray<int32> Drive1EdgedNodes;
+
+		// Find neighboring edges
+		const int32 NumEdges = Chunk.Edges.Num();
+		for (int32 i = 0; i < NumEdges; ++i)
+		{
+			const FMHEdge& Edge = Edges[NewMeshInfo.EdgeIndex + i];
+
+			if (Edge.NodeIndices[0] == NewDrive.NodeIndices[0])
+			{
+				Drive0EdgedNodes.AddUnique(Edge.NodeIndices[1]);
+			}
+
+			if (Edge.NodeIndices[1] == NewDrive.NodeIndices[0])
+			{
+				Drive0EdgedNodes.AddUnique(Edge.NodeIndices[0]);
+			}
+
+			if (Edge.NodeIndices[0] == NewDrive.NodeIndices[1])
+			{
+				Drive1EdgedNodes.AddUnique(Edge.NodeIndices[1]);
+			}
+
+			if (Edge.NodeIndices[1] == NewDrive.NodeIndices[1])
+			{
+				Drive1EdgedNodes.AddUnique(Edge.NodeIndices[0]);
+			}
+		}
+
+		const FVector NodePositions[2] = {
+			Nodes[NewDrive.NodeIndices[0]].Position,
+			Nodes[NewDrive.NodeIndices[1]].Position
+		};
+		
+		const FVector DriveAxis = NodePositions[1] - NodePositions[0];
+
+		for (int32 i : Drive0EdgedNodes)
+		{
+			if (Drive1EdgedNodes.Contains(i))
+			{
+				// See if which side?
+				const float DistanceTo0 = (Nodes[i].Position - NodePositions[0]) | DriveAxis;
+				const float DistanceTo1 = (Nodes[i].Position - NodePositions[1]) | DriveAxis;
+
+				//ensure(!NewDrive.TorqueNodeIndices.Contains(i));
+				//NewDrive.TorqueNodeIndices.Add(i);
+			}
+		}
 	}
 
 	NewMeshInfo.NumNodes = Nodes.Num() - NewMeshInfo.NodeIndex;
@@ -800,6 +850,16 @@ void FMHPhysics::DebugDraw(UWorld* World)
 		::DrawDebugLine(World,
 			Nodes[Drive.NodeIndices[0]].Position,
 			Nodes[Drive.NodeIndices[1]].Position, FColor::Green, false, 0);
+
+		for (int32 i : Drive.TorqueNodeIndices[0])
+		{
+			::DrawDebugString(World, Nodes[i].Position, Drive.Name + TEXT("_0"), nullptr, FColor::Red, 0.0f);
+		}
+
+		for (int32 i : Drive.TorqueNodeIndices[1])
+		{
+			::DrawDebugString(World, Nodes[i].Position, Drive.Name + TEXT("_1"), nullptr, FColor::Red, 0.0f);
+		}
 	}
 
 	for (const FMHContact& Contact : Contacts)
