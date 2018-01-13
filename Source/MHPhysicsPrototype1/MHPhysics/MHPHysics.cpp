@@ -308,11 +308,19 @@ FMHMeshInfo FMHPhysics::GenerateFromChunk(const FMHChunk& Chunk, const FTransfor
 			if (Drive1EdgedNodes.Contains(i))
 			{
 				// See if which side?
-				const float DistanceTo0 = (Nodes[i].Position - NodePositions[0]) | DriveAxis;
-				const float DistanceTo1 = (Nodes[i].Position - NodePositions[1]) | DriveAxis;
+				const float DistanceTo0 = FMath::Abs((Nodes[i].Position - NodePositions[0]) | DriveAxis);
+				const float DistanceTo1 = FMath::Abs((Nodes[i].Position - NodePositions[1]) | DriveAxis);
 
-				//ensure(!NewDrive.TorqueNodeIndices.Contains(i));
-				//NewDrive.TorqueNodeIndices.Add(i);
+				if (DistanceTo0 > DistanceTo1)
+				{
+					ensure(!NewDrive.TorqueNodeIndices[1].Contains(i));
+					NewDrive.TorqueNodeIndices[1].Add(i);
+				}
+				else
+				{
+					ensure(!NewDrive.TorqueNodeIndices[0].Contains(i));
+					NewDrive.TorqueNodeIndices[0].Add(i);
+				}
 			}
 		}
 	}
@@ -575,6 +583,49 @@ void FMHPhysics::Step(float DeltaSeconds)
 
 			Nodes[Edge.NodeIndices[0]].Force -= ForceByK + ForceByD;
 			Nodes[Edge.NodeIndices[1]].Force += ForceByK + ForceByD;
+		}
+
+		// Apply drive force
+		for (const FMHDrive& Drive : Drives)
+		{
+			const FVector DrivePositions[2] = {
+				Nodes[Drive.NodeIndices[0]].Position,
+				Nodes[Drive.NodeIndices[1]].Position
+			};
+
+			const FVector DriveVector = DrivePositions[1] - DrivePositions[0];
+
+			const float DriveTorque = 50000.0f;
+			const float DriveTorque0PerNode = Drive.TorqueNodeIndices[0].Num() > 0 ? 
+				DriveTorque / Drive.TorqueNodeIndices[0].Num() : 0.0f;
+			const float DriveTorque1PerNode = Drive.TorqueNodeIndices[1].Num() > 0 ? 
+				DriveTorque / Drive.TorqueNodeIndices[1].Num() : 0.0f;
+			
+			for (int32 i : Drive.TorqueNodeIndices[0])
+			{
+				const FVector& Position = Nodes[i].Position;
+				const FVector DriveToNode = Position - DrivePositions[0];
+				const FVector ForceVector = (DriveVector ^ DriveToNode).GetSafeNormal();
+				const FVector Normal = (ForceVector ^ DriveVector).GetSafeNormal();
+
+				const float Distance = DriveToNode | Normal;
+				const float Force = (Distance > SMALL_NUMBER) ? DriveTorque0PerNode / Distance : 0.0f;
+
+				Nodes[i].Force += Force * ForceVector;
+			}
+
+			for (int32 i : Drive.TorqueNodeIndices[1])
+			{
+				const FVector& Position = Nodes[i].Position;
+				const FVector DriveToNode = Position - DrivePositions[1];
+				const FVector ForceVector = (DriveVector ^ DriveToNode).GetSafeNormal();
+				const FVector Normal = (ForceVector ^ DriveVector).GetSafeNormal();
+
+				const float Distance = DriveToNode | Normal;
+				const float Force = (Distance > SMALL_NUMBER) ? DriveTorque1PerNode / Distance : 0.0f;
+
+				Nodes[i].Force += Force * ForceVector;
+			}
 		}
 	}
 
