@@ -38,6 +38,12 @@ static TAutoConsoleVariable<float> CVarMHPhysicsFrictionCoeff(
 	TEXT("")
 );
 
+static TAutoConsoleVariable<float> CVarMHPMaxSpeed(
+	TEXT("mhp.maxSpeed"),
+	1000.0f,
+	TEXT("cm/s")
+);
+
 DECLARE_CYCLE_STAT(TEXT("MHP Tick"), STAT_MHPhysicsTick, STATGROUP_MHP);
 DECLARE_CYCLE_STAT(TEXT("MHP Step"), STAT_MHPhysicsStep, STATGROUP_MHP);
 DECLARE_CYCLE_STAT(TEXT("MHP CollisionDetect"), STAT_CollisionDetect, STATGROUP_MHP);
@@ -773,6 +779,9 @@ void FMHPhysics::Step(float DeltaSeconds)
 	{
 		SCOPE_CYCLE_COUNTER(STAT_Integration);
 
+		const float MaxSpeed = CVarMHPMaxSpeed.GetValueOnAnyThread();
+		const float MaxSpeedSquared = FMath::Square(MaxSpeed);
+
 		// Euler Integration
 		for (FMHNode& Node : Nodes)
 		{
@@ -780,6 +789,12 @@ void FMHPhysics::Step(float DeltaSeconds)
 			FVector AddVelocity = Acceleration * DeltaSeconds;
 			Node.Position += (Node.Velocity + (AddVelocity * 0.5f)) * DeltaSeconds;
 			Node.Velocity += AddVelocity;
+
+			const float SpeedSquared = Node.Velocity.SizeSquared();
+			if (SpeedSquared > MaxSpeedSquared + SMALL_NUMBER)
+			{
+				Node.Velocity *= MaxSpeed * FMath::InvSqrt(SpeedSquared);
+			}
 		}
 	}
 
