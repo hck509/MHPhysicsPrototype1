@@ -776,6 +776,7 @@ void FMHPhysics::Step(float DeltaSeconds)
 		Node.PrevPosition = Node.Position;
 	}
 
+	// Integration
 	{
 		SCOPE_CYCLE_COUNTER(STAT_Integration);
 
@@ -785,7 +786,11 @@ void FMHPhysics::Step(float DeltaSeconds)
 		// Euler Integration
 		for (FMHNode& Node : Nodes)
 		{
-			FVector Acceleration = Node.Mass > SMALL_NUMBER ? Node.Force / Node.Mass : FVector::ZeroVector;
+			if (Node.Mass < SMALL_NUMBER)
+			{
+				continue;
+			}
+			FVector Acceleration = Node.Force / Node.Mass;
 			FVector AddVelocity = Acceleration * DeltaSeconds;
 			Node.Position += (Node.Velocity + (AddVelocity * 0.5f)) * DeltaSeconds;
 			Node.Velocity += AddVelocity;
@@ -798,10 +803,11 @@ void FMHPhysics::Step(float DeltaSeconds)
 		}
 	}
 
+	// Update Caches
+
 	{
 		SCOPE_CYCLE_COUNTER(STAT_UpdateNodeBBox);
 
-		// Update Caches
 		for (FMHNode& Node : Nodes)
 		{
 			Node.UpdateBBox();
