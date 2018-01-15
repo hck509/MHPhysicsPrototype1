@@ -31,6 +31,8 @@ public:
 	// Called every frame
 	virtual void TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction) override;
 
+	const FMHMeshInfo& GetMHMeshInfo() const { return MHMeshInfo; }
+
 #if WITH_EDITORONLY_DATA
 	void ImportFBX();
 	void Reimport();

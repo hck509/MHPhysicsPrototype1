@@ -220,6 +220,7 @@ FMHMeshInfo FMHPhysics::GenerateFromChunk(const FMHChunk& Chunk, const FTransfor
 	NewMeshInfo.NodeIndex = Nodes.Num();
 	NewMeshInfo.EdgeIndex = Edges.Num();
 	NewMeshInfo.TriangleIndex = Triangles.Num();
+	NewMeshInfo.DriveIndex = Drives.Num();
 
 	const int32 NodeOffset = Nodes.Num();
 	const int32 NumNodes = Chunk.Nodes.Num();
@@ -271,6 +272,7 @@ FMHMeshInfo FMHPhysics::GenerateFromChunk(const FMHChunk& Chunk, const FTransfor
 		NewDrive.Name = Drive.Name;
 		NewDrive.NodeIndices[0] = NodeOffset + Drive.NodeIndices[0];
 		NewDrive.NodeIndices[1] = NodeOffset + Drive.NodeIndices[1];
+		NewDrive.Torque = 0;
 
 		TArray<int32> Drive0EdgedNodes;
 		TArray<int32> Drive1EdgedNodes;
@@ -334,6 +336,7 @@ FMHMeshInfo FMHPhysics::GenerateFromChunk(const FMHChunk& Chunk, const FTransfor
 	NewMeshInfo.NumNodes = Nodes.Num() - NewMeshInfo.NodeIndex;
 	NewMeshInfo.NumEdges = Edges.Num() - NewMeshInfo.EdgeIndex;
 	NewMeshInfo.NumTriangles = Triangles.Num() - NewMeshInfo.TriangleIndex;
+	NewMeshInfo.NumDrives = Drives.Num() - NewMeshInfo.DriveIndex;
 
 	FMHMesh NewMesh;
 	NewMesh.Info = NewMeshInfo;
@@ -601,7 +604,7 @@ void FMHPhysics::Step(float DeltaSeconds)
 
 			const FVector DriveVector = DrivePositions[1] - DrivePositions[0];
 
-			const float DriveTorque = 50000.0f;
+			const float DriveTorque = Drive.Torque;
 			const float DriveTorque0PerNode = Drive.TorqueNodeIndices[0].Num() > 0 ? 
 				DriveTorque / Drive.TorqueNodeIndices[0].Num() : 0.0f;
 			const float DriveTorque1PerNode = Drive.TorqueNodeIndices[1].Num() > 0 ? 
@@ -853,6 +856,14 @@ const FMHTriangle* FMHPhysics::FindTriangle(int32 TriangleIndex) const
 	}
 
 	return nullptr;
+}
+
+void FMHPhysics::SetDriveTorque(int32 DriveIndex, float Torque)
+{
+	if (ensure(Drives.IsValidIndex(DriveIndex)))
+	{
+		Drives[DriveIndex].Torque = Torque;
+	}
 }
 
 void FMHPhysics::DebugDraw(UWorld* World)

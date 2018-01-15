@@ -168,6 +168,8 @@ struct FMHDrive
 	FString Name;
 	int32 NodeIndices[2];
 	TArray<int32> TorqueNodeIndices[2];
+
+	float Torque;
 };
 
 struct FMHMeshInfo
@@ -181,6 +183,9 @@ struct FMHMeshInfo
 	int32 TriangleIndex;
 	int32 NumTriangles;
 
+	int32 DriveIndex;
+	int32 NumDrives;
+
 	FMHMeshInfo()
 	{
 		NodeIndex = 0;
@@ -189,6 +194,8 @@ struct FMHMeshInfo
 		NumEdges = 0;
 		TriangleIndex = 0;
 		NumTriangles = 0;
+		DriveIndex = 0;
+		NumDrives = 0;
 	}
 };
 
@@ -243,6 +250,8 @@ public:
 
 	const FMHNode* FindNode(int32 NodeIndex) const;
 	const FMHTriangle* FindTriangle(int32 TriangleIndex) const;
+
+	void SetDriveTorque(int32 DriveIndex, float Torque);
 
 	void DebugDraw(UWorld* World);
 

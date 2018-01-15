@@ -5,13 +5,13 @@
 #include "MHPhysics/MHStaticMeshComponent.h"
 #include "VehicleActor.generated.h"
 
-USTRUCT()
-struct FVehicleControl
+UCLASS()
+class UVehicleControl : public UObject
 {
 	GENERATED_BODY()
 
 public:
-	FVehicleControl();
+	UVehicleControl();
 
 	void Tick(float DeltaSeconds);
 
@@ -71,14 +71,21 @@ public:
 	// Called every frame
 	virtual void Tick(float DeltaTime) override;
 
-	// Called to bind functionality to input
+	virtual void PossessedBy(AController* NewController) override;
 	virtual void SetupPlayerInputComponent(class UInputComponent* PlayerInputComponent) override;
 
 private:
 	UPROPERTY()
-	FVehicleControl Control;
+	UVehicleControl* Control;
 
-	UPROPERTY()
+	UPROPERTY(EditAnywhere)
 	UMHStaticMeshComponent* MeshComponent;
 	
+	/** Spring arm that will offset the camera */
+	UPROPERTY(Category = "Vehicle Camera", VisibleDefaultsOnly, BlueprintReadOnly, meta = (AllowPrivateAccess = "true"))
+	class USpringArmComponent* CameraSpringArm;
+
+	/** Camera component that will be our viewpoint */
+	UPROPERTY(Category = "Vehicle Camera", VisibleDefaultsOnly, BlueprintReadOnly, meta = (AllowPrivateAccess = "true"))
+	class UCameraComponent* Camera;
 };

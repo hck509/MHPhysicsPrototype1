@@ -1,7 +1,6 @@
-// Fill out your copyright notice in the Description page of Project Settings.
-
 #include "VehicleActor.h"
-
+#include "Engine.h"
+#include "MHPhysicsPrototype1GameModeBase.h"
 
 // Sets default values
 AVehicleActor::AVehicleActor()
@@ -9,7 +8,25 @@ AVehicleActor::AVehicleActor()
  	// Set this pawn to call Tick() every frame.  You can turn this off to improve performance if you don't need it.
 	PrimaryActorTick.bCanEverTick = true;
 
-	MeshComponent = CreateDefaultSubobject<UMHStaticMeshComponent>(TEXT("Mesh"));
+	Control = CreateDefaultSubobject<UVehicleControl>(TEXT("Control"));
+	MeshComponent = CreateDefaultSubobject<UMHStaticMeshComponent>(TEXT("MeshComponent"));
+
+	// Create a spring arm component
+	CameraSpringArm = CreateDefaultSubobject<USpringArmComponent>(TEXT("CameraSpringArm"));
+	CameraSpringArm->TargetOffset = FVector(0.f, 0.f, 100.f);
+	CameraSpringArm->SetRelativeRotation(FRotator(-15.f, 0.f, 0.f));
+	CameraSpringArm->SetupAttachment(RootComponent);
+	CameraSpringArm->TargetArmLength = 800.0f;
+	CameraSpringArm->bEnableCameraRotationLag = true;
+	CameraSpringArm->CameraRotationLagSpeed = 4.f;
+	CameraSpringArm->bInheritPitch = false;
+	CameraSpringArm->bInheritRoll = false;
+
+	// Create camera component 
+	Camera = CreateDefaultSubobject<UCameraComponent>(TEXT("Camera"));
+	Camera->SetupAttachment(CameraSpringArm, USpringArmComponent::SocketName);
+	Camera->bUsePawnControlRotation = false;
+	Camera->FieldOfView = 90.f;
 }
 
 // Called when the game starts or when spawned
@@ -24,6 +41,28 @@ void AVehicleActor::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
 
+	Control->Tick(DeltaTime);
+
+	AMHPhysicsPrototype1GameModeBase* GameMode = Cast<AMHPhysicsPrototype1GameModeBase>(GetWorld()->GetAuthGameMode());
+
+	if (ensure(GameMode))
+	{
+		FMHPhysics& MHPhysics = GameMode->GetMHPhyscis();
+
+		for (int32 i = 0; i < MeshComponent->GetMHMeshInfo().NumDrives; ++i)
+		{
+			const int32 DriveIndex = MeshComponent->GetMHMeshInfo().DriveIndex + i;
+			
+			MHPhysics.SetDriveTorque(DriveIndex, 10000000 * Control->GetThrottle());
+		}
+	}
+}
+
+void AVehicleActor::PossessedBy(AController* NewController)
+{
+	Super::PossessedBy(NewController);
+
+	Camera->Activate();
 }
 
 // Called to bind functionality to input
@@ -31,21 +70,21 @@ void AVehicleActor::SetupPlayerInputComponent(UInputComponent* PlayerInputCompon
 {
 	Super::SetupPlayerInputComponent(PlayerInputComponent);
 
-	PlayerInputComponent->BindAxis(TEXT("Throttle"), &Control, &FVehicleControl::OnThrottle);
-	PlayerInputComponent->BindAxis(TEXT("Brake"), &Control, &FVehicleControl::OnBrake);
-	PlayerInputComponent->BindAxis(TEXT("Steer"), &Control, &FVehicleControl::OnSteer);
+	PlayerInputComponent->BindAxis(TEXT("Throttle"), Control, &UVehicleControl::OnThrottle);
+	PlayerInputComponent->BindAxis(TEXT("Brake"), Control, &UVehicleControl::OnBrake);
+	PlayerInputComponent->BindAxis(TEXT("Steer"), Control, &UVehicleControl::OnSteer);
 	//PlayerInputComponent->BindAxis(TEXT("Handbrake"), &Control, &FVehicleControl::OnHandbrake);
 
-	PlayerInputComponent->BindAction(TEXT("SteerLeft"), EInputEvent::IE_Pressed, &Control, &FVehicleControl::OnSteerLeftPressed);
-	PlayerInputComponent->BindAction(TEXT("SteerLeft"), EInputEvent::IE_Released, &Control, &FVehicleControl::OnSteerLeftReleased);
-	PlayerInputComponent->BindAction(TEXT("SteerRight"), EInputEvent::IE_Pressed, &Control, &FVehicleControl::OnSteerRightPressed);
-	PlayerInputComponent->BindAction(TEXT("SteerRight"), EInputEvent::IE_Released, &Control, &FVehicleControl::OnSteerRightReleased);
+	PlayerInputComponent->BindAction(TEXT("SteerLeft"), EInputEvent::IE_Pressed, Control, &UVehicleControl::OnSteerLeftPressed);
+	PlayerInputComponent->BindAction(TEXT("SteerLeft"), EInputEvent::IE_Released, Control, &UVehicleControl::OnSteerLeftReleased);
+	PlayerInputComponent->BindAction(TEXT("SteerRight"), EInputEvent::IE_Pressed, Control, &UVehicleControl::OnSteerRightPressed);
+	PlayerInputComponent->BindAction(TEXT("SteerRight"), EInputEvent::IE_Released, Control, &UVehicleControl::OnSteerRightReleased);
 
 	//PlayerInputComponent->BindAction(TEXT("GearUp"), EInputEvent::IE_Pressed, &Control, &FVehicleControl::OnGearUp);
 	//PlayerInputComponent->BindAction(TEXT("GearDown"), EInputEvent::IE_Pressed, &Control, &FVehicleControl::OnGearDown);
 }
 
-FVehicleControl::FVehicleControl()
+UVehicleControl::UVehicleControl()
 	: Throttle(0.0f)
 	, Brake(0.0f)
 	, Steer(0.0f)
@@ -58,33 +97,40 @@ FVehicleControl::FVehicleControl()
 
 }
 
-void FVehicleControl::Tick(float DeltaSeconds)
+void UVehicleControl::Tick(float DeltaSeconds)
 {
 	TickButtonSteering(DeltaSeconds);
+
+	if (GEngine)
+	{
+		GEngine->AddOnScreenDebugMessage((uint64)this, 0, FColor::White,
+			FString::Printf(TEXT("Gear(%d), Steer(%04.2f) Throttle(%04.2f) Brake(%04.2f)"),
+				Gear, Steer, Throttle, Brake));
+	}
 }
 
-void FVehicleControl::SetThrottle(float InThrottle)
+void UVehicleControl::SetThrottle(float InThrottle)
 {
 	ensureMsgf(InThrottle >= 0.0f && InThrottle <= 1.0f, TEXT("Invalid throttle for vehicle: %f"), InThrottle);
 
 	Throttle = FMath::Clamp(InThrottle, 0.0f, 1.0f);
 }
 
-void FVehicleControl::SetBrake(float InBrake)
+void UVehicleControl::SetBrake(float InBrake)
 {
 	ensureMsgf(InBrake >= 0.0f && InBrake <= 1.0f, TEXT("Invalid brake for vehicle: %f"), InBrake);
 
 	Brake = FMath::Clamp(InBrake, 0.0f, 1.0f);
 }
 
-void FVehicleControl::SetSteer(float InSteer)
+void UVehicleControl::SetSteer(float InSteer)
 {
 	ensureMsgf(InSteer >= -1.0f && InSteer <= 1.0f, TEXT("Invalid steer for vehicle: %f"), InSteer);
 
 	Steer = FMath::Clamp(InSteer, -1.0f, 1.0f);
 }
 
-void FVehicleControl::OnThrottle(float InThrottle)
+void UVehicleControl::OnThrottle(float InThrottle)
 {
 	if (InThrottle < 0)
 	{
@@ -95,7 +141,7 @@ void FVehicleControl::OnThrottle(float InThrottle)
 	SetThrottle(InThrottle);
 }
 
-void FVehicleControl::OnBrake(float InBrake)
+void UVehicleControl::OnBrake(float InBrake)
 {
 	if (InBrake < 0)
 	{
@@ -106,7 +152,7 @@ void FVehicleControl::OnBrake(float InBrake)
 	SetBrake(InBrake);
 }
 
-void FVehicleControl::OnSteer(float InSteer)
+void UVehicleControl::OnSteer(float InSteer)
 {
 	SteerAxisInput = InSteer;
 
@@ -116,31 +162,31 @@ void FVehicleControl::OnSteer(float InSteer)
 	}
 }
 
-void FVehicleControl::OnSteerLeftPressed()
+void UVehicleControl::OnSteerLeftPressed()
 {
 	bSteerLeft = true;
 	bSteerByButton = true;
 }
 
-void FVehicleControl::OnSteerLeftReleased()
+void UVehicleControl::OnSteerLeftReleased()
 {
 	bSteerLeft = false;
 	bSteerByButton = true;
 }
 
-void FVehicleControl::OnSteerRightPressed()
+void UVehicleControl::OnSteerRightPressed()
 {
 	bSteerRight = true;
 	bSteerByButton = true;
 }
 
-void FVehicleControl::OnSteerRightReleased()
+void UVehicleControl::OnSteerRightReleased()
 {
 	bSteerRight = false;
 	bSteerByButton = true;
 }
 
-void FVehicleControl::TickButtonSteering(float DeltaSeconds)
+void UVehicleControl::TickButtonSteering(float DeltaSeconds)
 {
 	if (!bSteerByButton)
 	{
