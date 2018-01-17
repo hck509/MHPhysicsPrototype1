@@ -308,7 +308,7 @@ FMHMeshInfo FMHPhysics::GenerateFromChunk(const FMHChunk& Chunk, const FTransfor
 			Nodes[NewDrive.NodeIndices[0]].Position,
 			Nodes[NewDrive.NodeIndices[1]].Position
 		};
-		
+
 		const FVector DriveAxis = NodePositions[1] - NodePositions[0];
 
 		for (int32 i : Drive0EdgedNodes)
@@ -331,6 +331,45 @@ FMHMeshInfo FMHPhysics::GenerateFromChunk(const FMHChunk& Chunk, const FTransfor
 				}
 			}
 		}
+	}
+
+	for (const FMHChunkHydraulic& Hydraulic : Chunk.Hydraulics)
+	{
+		// Look for edge
+		const int32 NodeIndices[2] = {
+			NodeOffset + Hydraulic.NodeIndices[0],
+			NodeOffset + Hydraulic.NodeIndices[1]
+		};
+
+		int32 MatchingEdgeIndex = -1;
+
+		for (int32 EdgeIndex = NewMeshInfo.EdgeIndex; EdgeIndex < Edges.Num(); ++EdgeIndex)
+		{
+			const FMHEdge& Edge = Edges[EdgeIndex];
+
+			if ((Edge.NodeIndices[0] == NodeIndices[0] && Edge.NodeIndices[1] == NodeIndices[1]) ||
+				(Edge.NodeIndices[1] == NodeIndices[0] && Edge.NodeIndices[0] == NodeIndices[1]))
+			{
+				MatchingEdgeIndex = EdgeIndex;
+				break;
+			}
+		}
+
+		if (MatchingEdgeIndex == -1)
+		{
+			ensure(0);
+			continue;
+		}
+
+		Hydraulics.AddDefaulted(1);
+
+		FMHHydraulic& NewHydraulic = Hydraulics.Last();
+		NewHydraulic.Name = Hydraulic.Name;
+		NewHydraulic.NodeIndices[0] = NodeIndices[0];
+		NewHydraulic.NodeIndices[1] = NodeIndices[1];
+		NewHydraulic.EdgeIndex = MatchingEdgeIndex;
+		NewHydraulic.DefaultLength = Edges[MatchingEdgeIndex].DefaultLength;
+		NewHydraulic.Length = NewHydraulic.DefaultLength;
 	}
 
 	NewMeshInfo.NumNodes = Nodes.Num() - NewMeshInfo.NodeIndex;
@@ -572,6 +611,16 @@ void FMHPhysics::Step(float DeltaSeconds)
 		for (FMHNode& Node : Nodes)
 		{
 			Node.Force = Node.Mass * Setting.Gravity;
+		}
+	}
+
+	{
+		// Apply Hydraulic
+		for (const FMHHydraulic& Hydraulic : Hydraulics)
+		{
+			FMHEdge& Edge = Edges[Hydraulic.EdgeIndex];
+
+			Edge.DefaultLength = Hydraulic.Length;
 		}
 	}
 
@@ -866,6 +915,14 @@ void FMHPhysics::SetDriveTorque(int32 DriveIndex, float Torque)
 	}
 }
 
+void FMHPhysics::SetHydraulicScale(int32 HydraulicIndex, float Scale)
+{
+	if (ensure(Hydraulics.IsValidIndex(HydraulicIndex)))
+	{
+		Hydraulics[HydraulicIndex].Length = Hydraulics[HydraulicIndex].DefaultLength * Scale;
+	}
+}
+
 void FMHPhysics::DebugDraw(UWorld* World)
 {
 	SCOPE_CYCLE_COUNTER(STAT_Draw);
@@ -1154,7 +1211,7 @@ bool FMHChunk::LoadFromFbx(const FString& Filename)
 	// Look for Drives
 	for (const FNullNode& NullNode : NullNodes)
 	{
-		if (NullNode.Name.StartsWith(TEXT("__DRIVE0")))
+		if (NullNode.Name.StartsWith(TEXT("__DRIVE0_")))
 		{
 			FString PairName = NullNode.Name.Replace(TEXT("__DRIVE0_"), TEXT("__DRIVE1_"));
 			FNullNode* PairNode = NullNodes.FindByPredicate([PairName](const FNullNode& Node) {
@@ -1172,6 +1229,26 @@ bool FMHChunk::LoadFromFbx(const FString& Filename)
 		}
 	}
 
+	// Look for Hydraulics
+	for (const FNullNode& NullNode : NullNodes)
+	{
+		if (NullNode.Name.StartsWith(TEXT("__HYD0_")))
+		{
+			FString PairName = NullNode.Name.Replace(TEXT("__HYD0_"), TEXT("__HYD1_"));
+			FNullNode* PairNode = NullNodes.FindByPredicate([PairName](const FNullNode& Node) {
+				return Node.Name == PairName;
+			});
+
+			if (PairNode)
+			{
+				FMHChunkHydraulic Hydraulic;
+				Hydraulic.Name = NullNode.Name.Replace(TEXT("__HYD0_"), TEXT(""));
+				Hydraulic.NodeIndices[0] = NullNode.NodeIndex;
+				Hydraulic.NodeIndices[1] = PairNode->NodeIndex;
+				Hydraulics.Add(Hydraulic);
+			}
+		}
+	}
 
 	return true;
 }

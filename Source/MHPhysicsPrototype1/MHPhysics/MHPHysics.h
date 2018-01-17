@@ -45,6 +45,18 @@ struct FMHChunkDrive
 };
 
 USTRUCT()
+struct FMHChunkHydraulic
+{
+	GENERATED_BODY()
+
+	UPROPERTY()
+	FString Name;
+
+	UPROPERTY()
+	int32 NodeIndices[2];
+};
+
+USTRUCT()
 struct FMHChunk
 {
 	GENERATED_BODY()
@@ -61,12 +73,16 @@ struct FMHChunk
 	UPROPERTY()
 	TArray<FMHChunkDrive> Drives;
 
+	UPROPERTY()
+	TArray<FMHChunkHydraulic> Hydraulics;
+
 	void Clear()
 	{
 		Nodes.Empty();
 		Edges.Empty();
 		Triangles.Empty();
 		Drives.Empty();
+		Hydraulics.Empty();
 	}
 
 #if WITH_EDITORONLY_DATA
@@ -172,6 +188,16 @@ struct FMHDrive
 	float Torque;
 };
 
+struct FMHHydraulic
+{
+	FString Name;
+	int32 NodeIndices[2];
+	int32 EdgeIndex;
+
+	float DefaultLength;
+	float Length;
+};
+
 struct FMHMeshInfo
 {
 	int32 NodeIndex;
@@ -250,8 +276,9 @@ public:
 
 	const FMHNode* FindNode(int32 NodeIndex) const;
 	const FMHTriangle* FindTriangle(int32 TriangleIndex) const;
-
+	
 	void SetDriveTorque(int32 DriveIndex, float Torque);
+	void SetHydraulicScale(int32 HydraulicIndex, float Scale);
 
 	void DebugDraw(UWorld* World);
 
@@ -265,6 +292,7 @@ private:
 	TArray<FMHTriangle> Triangles;
 	TArray<FMHMesh> Meshes;
 	TArray<FMHDrive> Drives;
+	TArray<FMHHydraulic> Hydraulics;
 
 	// Intermediate State
 	TArray<FMHContact> Contacts;
