@@ -76,7 +76,7 @@ public:
 
 private:
 	UPROPERTY()
-	UVehicleControl* Control;
+	USceneComponent* SceneComponent;
 
 	UPROPERTY(EditAnywhere)
 	UMHStaticMeshComponent* MeshComponent;
@@ -88,4 +88,9 @@ private:
 	/** Camera component that will be our viewpoint */
 	UPROPERTY(Category = "Vehicle Camera", VisibleDefaultsOnly, BlueprintReadOnly, meta = (AllowPrivateAccess = "true"))
 	class UCameraComponent* Camera;
+
+	UPROPERTY()
+	UVehicleControl* Control;
+
+	int32 CenterNodeIndex;
 };

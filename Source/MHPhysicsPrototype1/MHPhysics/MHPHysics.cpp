@@ -602,7 +602,7 @@ void FMHPhysics::Step(float DeltaSeconds)
 				Nodes[Drive.NodeIndices[1]].Position
 			};
 
-			const FVector DriveVector = DrivePositions[1] - DrivePositions[0];
+			const FVector DriveVector = DrivePositions[0] - DrivePositions[1];
 
 			const float DriveTorque = Drive.Torque;
 			const float DriveTorque0PerNode = Drive.TorqueNodeIndices[0].Num() > 0 ? 

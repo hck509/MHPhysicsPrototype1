@@ -1,6 +1,7 @@
 #include "VehicleActor.h"
 #include "Engine.h"
 #include "MHPhysicsPrototype1GameModeBase.h"
+#include "MHPhysics/MHPHysics.h"
 
 // Sets default values
 AVehicleActor::AVehicleActor()
@@ -8,8 +9,11 @@ AVehicleActor::AVehicleActor()
  	// Set this pawn to call Tick() every frame.  You can turn this off to improve performance if you don't need it.
 	PrimaryActorTick.bCanEverTick = true;
 
-	Control = CreateDefaultSubobject<UVehicleControl>(TEXT("Control"));
+	SceneComponent = CreateDefaultSubobject<USceneComponent>(TEXT("SceneComponent"));
+	RootComponent = SceneComponent;
+
 	MeshComponent = CreateDefaultSubobject<UMHStaticMeshComponent>(TEXT("MeshComponent"));
+	MeshComponent->SetupAttachment(RootComponent);
 
 	// Create a spring arm component
 	CameraSpringArm = CreateDefaultSubobject<USpringArmComponent>(TEXT("CameraSpringArm"));
@@ -27,13 +31,45 @@ AVehicleActor::AVehicleActor()
 	Camera->SetupAttachment(CameraSpringArm, USpringArmComponent::SocketName);
 	Camera->bUsePawnControlRotation = false;
 	Camera->FieldOfView = 90.f;
+
+	Control = CreateDefaultSubobject<UVehicleControl>(TEXT("Control"));
+
+	CenterNodeIndex = -1;
 }
 
 // Called when the game starts or when spawned
 void AVehicleActor::BeginPlay()
 {
 	Super::BeginPlay();
-	
+
+	AMHPhysicsPrototype1GameModeBase* GameMode = Cast<AMHPhysicsPrototype1GameModeBase>(GetWorld()->GetAuthGameMode());
+
+	if (GameMode)
+	{
+		FMHPhysics& Physics = GameMode->GetMHPhyscis();
+
+		// find nearest to center node index
+		const FVector CenterPosition = GetActorLocation();
+		float NearestDistanceSquared = 10E10;
+		int32 NearestIndex = -1;
+
+		const FMHMeshInfo& MeshInfo = MeshComponent->GetMHMeshInfo();
+		for (int32 NodeIndex = 0; NodeIndex < MeshInfo.NumNodes; ++NodeIndex)
+		{
+			const FMHNode* Node = Physics.FindNode(MeshInfo.NodeIndex + NodeIndex);
+			if (Node)
+			{
+				const float DistanceSquared = (Node->Position - CenterPosition).SizeSquared();
+				if (NearestDistanceSquared > DistanceSquared)
+				{
+					NearestDistanceSquared = DistanceSquared;
+					NearestIndex = NodeIndex;
+				}
+			}
+		}
+
+		CenterNodeIndex = NearestIndex;
+	}
 }
 
 // Called every frame
@@ -54,6 +90,42 @@ void AVehicleActor::Tick(float DeltaTime)
 			const int32 DriveIndex = MeshComponent->GetMHMeshInfo().DriveIndex + i;
 			
 			MHPhysics.SetDriveTorque(DriveIndex, 10000000 * Control->GetThrottle());
+		}
+	}
+
+	APlayerController* PossessedPlayerController = Cast<APlayerController>(Controller);
+
+	if (PossessedPlayerController && PossessedPlayerController->IsInputKeyDown(EKeys::RightMouseButton))
+	{
+		float DeltaX, DeltaY;
+		PossessedPlayerController->GetInputMouseDelta(DeltaX, DeltaY);
+
+		//CameraSpringArm->AddRelativeRotation(FRotator(0, DeltaX, 0));
+
+		FRotator RotationDelta(0, DeltaX, 0);
+		FTransform Transform = CameraSpringArm->GetComponentTransform();
+		Transform.SetRotation(RotationDelta.Quaternion() * Transform.GetRotation());
+		Transform.NormalizeRotation();
+		CameraSpringArm->SetWorldTransform(Transform);
+	}
+
+	if (CenterNodeIndex != -1)
+	{
+		AMHPhysicsPrototype1GameModeBase* GameMode = Cast<AMHPhysicsPrototype1GameModeBase>(GetWorld()->GetAuthGameMode());
+
+		if (GameMode)
+		{
+			FMHPhysics& Physics = GameMode->GetMHPhyscis();
+			const FMHMeshInfo& MeshInfo = MeshComponent->GetMHMeshInfo();
+
+			if (CenterNodeIndex < MeshInfo.NumNodes)
+			{
+				const FMHNode* Node = Physics.FindNode(MeshInfo.NodeIndex + CenterNodeIndex);
+				if (ensure(Node))
+				{
+					SetActorLocation(Node->Position);
+				}
+			}
 		}
 	}
 }
