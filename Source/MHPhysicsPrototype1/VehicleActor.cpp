@@ -77,38 +77,18 @@ void AVehicleActor::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
 
+	UpdateLocationFromPhysics();
+
 	Control->Tick(DeltaTime);
 
-	AMHPhysicsPrototype1GameModeBase* GameMode = Cast<AMHPhysicsPrototype1GameModeBase>(GetWorld()->GetAuthGameMode());
+	UpdateDriveTorque();
+	UpdateSteeringHydraulics();
 
-	if (ensure(GameMode))
-	{
-		FMHPhysics& MHPhysics = GameMode->GetMHPhyscis();
+	TickCameraRotation();
+}
 
-		for (int32 i = 0; i < MeshComponent->GetMHMeshInfo().NumDrives; ++i)
-		{
-			const int32 DriveIndex = MeshComponent->GetMHMeshInfo().DriveIndex + i;
-			
-			MHPhysics.SetDriveTorque(DriveIndex, 10000000 * Control->GetThrottle());
-		}
-	}
-
-	APlayerController* PossessedPlayerController = Cast<APlayerController>(Controller);
-
-	if (PossessedPlayerController && PossessedPlayerController->IsInputKeyDown(EKeys::RightMouseButton))
-	{
-		float DeltaX, DeltaY;
-		PossessedPlayerController->GetInputMouseDelta(DeltaX, DeltaY);
-
-		//CameraSpringArm->AddRelativeRotation(FRotator(0, DeltaX, 0));
-
-		FRotator RotationDelta(0, DeltaX, 0);
-		FTransform Transform = CameraSpringArm->GetComponentTransform();
-		Transform.SetRotation(RotationDelta.Quaternion() * Transform.GetRotation());
-		Transform.NormalizeRotation();
-		CameraSpringArm->SetWorldTransform(Transform);
-	}
-
+void AVehicleActor::UpdateLocationFromPhysics()
+{
 	if (CenterNodeIndex != -1)
 	{
 		AMHPhysicsPrototype1GameModeBase* GameMode = Cast<AMHPhysicsPrototype1GameModeBase>(GetWorld()->GetAuthGameMode());
@@ -127,6 +107,59 @@ void AVehicleActor::Tick(float DeltaTime)
 				}
 			}
 		}
+	}
+}
+
+void AVehicleActor::UpdateDriveTorque()
+{
+	AMHPhysicsPrototype1GameModeBase* GameMode = Cast<AMHPhysicsPrototype1GameModeBase>(GetWorld()->GetAuthGameMode());
+
+	if (ensure(GameMode))
+	{
+		FMHPhysics& MHPhysics = GameMode->GetMHPhyscis();
+
+		for (int32 i = 0; i < MeshComponent->GetMHMeshInfo().NumDrives; ++i)
+		{
+			const int32 DriveIndex = MeshComponent->GetMHMeshInfo().DriveIndex + i;
+
+			MHPhysics.SetDriveTorque(DriveIndex, 10000000 * Control->GetThrottle());
+		}
+	}
+}
+
+void AVehicleActor::UpdateSteeringHydraulics()
+{
+	AMHPhysicsPrototype1GameModeBase* GameMode = Cast<AMHPhysicsPrototype1GameModeBase>(GetWorld()->GetAuthGameMode());
+
+	if (ensure(GameMode))
+	{
+		FMHPhysics& MHPhysics = GameMode->GetMHPhyscis();
+
+		for (int32 i = 0; i < MeshComponent->GetMHMeshInfo().NumHydraulics; ++i)
+		{
+			const int32 HydraulicIndex = MeshComponent->GetMHMeshInfo().HydraulicIndex + i;
+
+			MHPhysics.SetHydraulicScale(HydraulicIndex, 1.0f + (Control->GetSteer() * 0.5f));
+		}
+	}
+}
+
+void AVehicleActor::TickCameraRotation()
+{
+	APlayerController* PossessedPlayerController = Cast<APlayerController>(Controller);
+
+	if (PossessedPlayerController && PossessedPlayerController->IsInputKeyDown(EKeys::RightMouseButton))
+	{
+		float DeltaX, DeltaY;
+		PossessedPlayerController->GetInputMouseDelta(DeltaX, DeltaY);
+
+		//CameraSpringArm->AddRelativeRotation(FRotator(0, DeltaX, 0));
+
+		FRotator RotationDelta(0, DeltaX, 0);
+		FTransform Transform = CameraSpringArm->GetComponentTransform();
+		Transform.SetRotation(RotationDelta.Quaternion() * Transform.GetRotation());
+		Transform.NormalizeRotation();
+		CameraSpringArm->SetWorldTransform(Transform);
 	}
 }
 

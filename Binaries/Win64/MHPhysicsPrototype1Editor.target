@@ -7126,6 +7126,10 @@
 			"Type": "NonUFS"
 		},
 		{
+			"Path": "$(EngineDir)/Binaries/Win64/libfbxsdk.dll",
+			"Type": "NonUFS"
+		},
+		{
 			"Path": "$(EngineDir)/Binaries/ThirdParty/ICU/icu4c-53_1/Win64/VS2015/icudt53.dll",
 			"Type": "NonUFS"
 		},
@@ -7195,10 +7199,6 @@
 		},
 		{
 			"Path": "$(EngineDir)/Binaries/Win64/tbbmalloc.dll",
-			"Type": "NonUFS"
-		},
-		{
-			"Path": "$(EngineDir)/Binaries/Win64/libfbxsdk.dll",
 			"Type": "NonUFS"
 		},
 		{

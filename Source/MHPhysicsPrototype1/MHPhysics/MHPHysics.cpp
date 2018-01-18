@@ -2,6 +2,7 @@
 #include "DrawDebugHelpers.h"
 #include "EngineUtils.h"
 #include "Engine/StaticMeshActor.h"
+#include "Engine.h"
 
 #if WITH_EDITOR
 #include "FbxImporter.h"
@@ -221,6 +222,7 @@ FMHMeshInfo FMHPhysics::GenerateFromChunk(const FMHChunk& Chunk, const FTransfor
 	NewMeshInfo.EdgeIndex = Edges.Num();
 	NewMeshInfo.TriangleIndex = Triangles.Num();
 	NewMeshInfo.DriveIndex = Drives.Num();
+	NewMeshInfo.HydraulicIndex = Hydraulics.Num();
 
 	const int32 NodeOffset = Nodes.Num();
 	const int32 NumNodes = Chunk.Nodes.Num();
@@ -376,6 +378,7 @@ FMHMeshInfo FMHPhysics::GenerateFromChunk(const FMHChunk& Chunk, const FTransfor
 	NewMeshInfo.NumEdges = Edges.Num() - NewMeshInfo.EdgeIndex;
 	NewMeshInfo.NumTriangles = Triangles.Num() - NewMeshInfo.TriangleIndex;
 	NewMeshInfo.NumDrives = Drives.Num() - NewMeshInfo.DriveIndex;
+	NewMeshInfo.NumHydraulics = Hydraulics.Num() - NewMeshInfo.HydraulicIndex;
 
 	FMHMesh NewMesh;
 	NewMesh.Info = NewMeshInfo;
@@ -575,6 +578,8 @@ void FMHPhysics::Tick(float DeltaSeconds)
 {
 	SCOPE_CYCLE_COUNTER(STAT_MHPhysicsTick);
 
+	Profile.PreTick();
+
 	DeltaSeconds *= CVarMHPhysicsSpeed.GetValueOnAnyThread();
 
 	const float MaxDetalSeconds = 0.03f;
@@ -589,6 +594,8 @@ void FMHPhysics::Tick(float DeltaSeconds)
 	{
 		Step(StepTickSeconds);
 		DeltaSeconds -= StepTickSeconds;
+
+		++Profile.NumStepsOnLastTick;
 	}
 
 	TickSecondLeft = DeltaSeconds;
@@ -932,6 +939,14 @@ void FMHPhysics::DebugDraw(UWorld* World)
 		return;
 	}
 
+	GEngine->AddOnScreenDebugMessage((uint64)this, 0, FColor::White,
+		FString::Printf(TEXT("[MHPhysics] Nodes: %d, Edges: %d, Triangles: %d"),
+			Nodes.Num(), Edges.Num(), Triangles.Num()));
+
+	GEngine->AddOnScreenDebugMessage((uint64)(this + 1), 0, FColor::White,
+		FString::Printf(TEXT("[MHPhysics] NumStepsOnLastTick: %03d"),
+			Profile.NumStepsOnLastTick));
+
 	for (const FMHNode& Node : Nodes)
 	{
 		::DrawDebugPoint(World, Node.Position, 10.0f, FColor::White, false, 0);
@@ -1261,3 +1276,4 @@ void FMHTriangle::UpdateBBox(const TArray<FMHNode>& Nodes)
 	CachedBBox += Nodes[NodeIndices[1]].CachedBBox;
 	CachedBBox += Nodes[NodeIndices[2]].CachedBBox;
 }
+

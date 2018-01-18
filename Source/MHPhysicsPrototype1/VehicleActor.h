@@ -75,6 +75,11 @@ public:
 	virtual void SetupPlayerInputComponent(class UInputComponent* PlayerInputComponent) override;
 
 private:
+	void UpdateLocationFromPhysics();
+	void UpdateDriveTorque();
+	void UpdateSteeringHydraulics();
+	void TickCameraRotation();
+
 	UPROPERTY()
 	USceneComponent* SceneComponent;
 

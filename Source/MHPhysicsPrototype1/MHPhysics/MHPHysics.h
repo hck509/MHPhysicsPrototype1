@@ -212,6 +212,9 @@ struct FMHMeshInfo
 	int32 DriveIndex;
 	int32 NumDrives;
 
+	int32 HydraulicIndex;
+	int32 NumHydraulics;
+
 	FMHMeshInfo()
 	{
 		NodeIndex = 0;
@@ -222,6 +225,8 @@ struct FMHMeshInfo
 		NumTriangles = 0;
 		DriveIndex = 0;
 		NumDrives = 0;
+		HydraulicIndex = 0;
+		NumHydraulics = 0;
 	}
 };
 
@@ -262,6 +267,22 @@ struct FMHPhsycisSetting
 	}
 };
 
+struct FMHPhysicsProfile
+{
+	FMHPhysicsProfile()
+		: NumStepsOnLastTick(0)
+	{
+
+	}
+
+	void PreTick()
+	{
+		NumStepsOnLastTick = 0;
+	}
+
+	int32 NumStepsOnLastTick;
+};
+
 class FMHPhysics
 {
 public:
@@ -298,4 +319,6 @@ private:
 	TArray<FMHContact> Contacts;
 
 	float TickSecondLeft;
+
+	FMHPhysicsProfile Profile;
 };
