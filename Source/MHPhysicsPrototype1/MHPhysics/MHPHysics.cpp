@@ -11,7 +11,7 @@
 
 static TAutoConsoleVariable<float> CVarMHPhysicsFPS(
 	TEXT("mhp.fps"),
-	500.0f,
+	2000.0f,
 	TEXT("")
 );
 
@@ -479,13 +479,15 @@ static void _DetectCollisionTriangleToTriangle(const TArray<FMHNode>& Nodes,
 	}
 }
 
-static void _DetectCollision(const TArray<FMHNode>& Nodes, const TArray<FMHTriangle>& Triangles,
+static void _DetectCollision(
+	const TArray<FMHNode>& Nodes, const TArray<FMHTriangle>& Triangles, TArray<FMHMesh>& Meshes,
 	TArray<FMHContact>& OutContacts)
 {
 	SCOPE_CYCLE_COUNTER(STAT_CollisionDetect);
 
 	const int32 NumNodes = Nodes.Num();
 	const int32 NumTriangles = Triangles.Num();
+	const int32 NumMeshes = Meshes.Num();
 
 	for (int32 NodeIndex = 0; NodeIndex < NumNodes; ++NodeIndex)
 	{
@@ -496,78 +498,89 @@ static void _DetectCollision(const TArray<FMHNode>& Nodes, const TArray<FMHTrian
 			continue;
 		}
 
-		for (int32 TriangleIndex = 0; TriangleIndex < NumTriangles; ++TriangleIndex)
+		for (int32 MeshIndex = 0; MeshIndex < NumMeshes; ++MeshIndex)
 		{
-			const FMHTriangle& Triangle = Triangles[TriangleIndex];
+			const bool bSameMesh = (Node.MeshIndex == MeshIndex);
 
-			if (!Node.bSelfCollision && Node.MeshIndex == Triangle.MeshIndex)
+			if (!Node.bSelfCollision && bSameMesh)
 			{
 				// Ignore self collision
 				continue;
 			}
 
-			if (Triangle.HasNodeIndex(NodeIndex))
+			const FMHMesh& Mesh = Meshes[MeshIndex];
+			const int32 NumTriangles = Mesh.Info.NumTriangles;
+			const int32 TriangleIndexOffset = Mesh.Info.TriangleIndex;
+
+			for (int32 i = 0; i < NumTriangles; ++i)
 			{
-				// Ignore node within same triangle
-				continue;
-			}
+				const int32 TriangleIndex = TriangleIndexOffset + i;
 
-			if (!Triangle.CachedBBox.Intersect(Node.CachedBBox))
-			{
-				// Ignore bbox not overlapped
-				continue;
-			}
+				const FMHTriangle& Triangle = Triangles[TriangleIndex];
 
-			SCOPE_CYCLE_COUNTER(STAT_CollisionDetectNodeToTriangle);
-
-			if ((Triangle.CacheFlags & FMHTriangle::ValidPrevPlane) == 0)
-			{
-				Triangle.CachedPrevPlane = FPlane(
-					Nodes[Triangle.NodeIndices[0]].PrevPosition,
-					Nodes[Triangle.NodeIndices[1]].PrevPosition,
-					Nodes[Triangle.NodeIndices[2]].PrevPosition);
-
-				Triangle.CacheFlags |= FMHTriangle::ValidPrevPlane;
-			}
-
-			if ((Triangle.CacheFlags & FMHTriangle::ValidPlane) == 0)
-			{
-				Triangle.CachedPlane = FPlane(
-					Nodes[Triangle.NodeIndices[0]].Position,
-					Nodes[Triangle.NodeIndices[1]].Position,
-					Nodes[Triangle.NodeIndices[2]].Position);
-
-				Triangle.CacheFlags |= FMHTriangle::ValidPlane;
-			}
-
-			const FPlane& PrevPlane = Triangle.CachedPrevPlane;
-			const FPlane& Plane = Triangle.CachedPlane;
-
-			const float Depth = 5.0f;
-			const FVector PrevPosition = Node.PrevPosition + (FVector(PrevPlane) * Depth);
-
-			const float PrevDistance = PrevPlane.PlaneDot(PrevPosition);
-			const float Distance = Plane.PlaneDot(Node.Position);
-
-			if (PrevDistance >= 0 && Distance <= 0)
-			{
-				float t;
-
-				if (_RayTriangleIntersect(Node.Position, FVector(Plane),
-					Nodes[Triangle.NodeIndices[0]].Position,
-					Nodes[Triangle.NodeIndices[1]].Position,
-					Nodes[Triangle.NodeIndices[2]].Position, FVector(Plane), t))
+				if (!Triangle.CachedBBox.Intersect(Node.CachedBBox))
 				{
-					FMHContact Contact;
-					Contact.TriangleIndices[0] = -1;
-					Contact.TriangleIndices[1] = TriangleIndex;
-					Contact.Depth = -Distance;
-					Contact.Normal = FVector(Plane);
+					// Ignore bbox not overlapped
+					continue;
+				}
 
-					Contact.Type = FMHContact::EType::NodeToTriangle;
-					Contact.NodeToTriangle.NodeIndex = NodeIndex;
+				if (bSameMesh && Triangle.HasNodeIndex(NodeIndex))
+				{
+					// Ignore node within same triangle
+					continue;
+				}
 
-					OutContacts.Add(Contact);
+				SCOPE_CYCLE_COUNTER(STAT_CollisionDetectNodeToTriangle);
+
+				if ((Triangle.CacheFlags & FMHTriangle::ValidPrevPlane) == 0)
+				{
+					Triangle.CachedPrevPlane = FPlane(
+						Nodes[Triangle.NodeIndices[0]].PrevPosition,
+						Nodes[Triangle.NodeIndices[1]].PrevPosition,
+						Nodes[Triangle.NodeIndices[2]].PrevPosition);
+
+					Triangle.CacheFlags |= FMHTriangle::ValidPrevPlane;
+				}
+
+				if ((Triangle.CacheFlags & FMHTriangle::ValidPlane) == 0)
+				{
+					Triangle.CachedPlane = FPlane(
+						Nodes[Triangle.NodeIndices[0]].Position,
+						Nodes[Triangle.NodeIndices[1]].Position,
+						Nodes[Triangle.NodeIndices[2]].Position);
+
+					Triangle.CacheFlags |= FMHTriangle::ValidPlane;
+				}
+
+				const FPlane& PrevPlane = Triangle.CachedPrevPlane;
+				const FPlane& Plane = Triangle.CachedPlane;
+
+				const float Depth = 5.0f;
+				const FVector PrevPosition = Node.PrevPosition + (FVector(PrevPlane) * Depth);
+
+				const float PrevDistance = PrevPlane.PlaneDot(PrevPosition);
+				const float Distance = Plane.PlaneDot(Node.Position);
+
+				if (PrevDistance >= 0 && Distance <= 0)
+				{
+					float t;
+
+					if (_RayTriangleIntersect(Node.Position, FVector(Plane),
+						Nodes[Triangle.NodeIndices[0]].Position,
+						Nodes[Triangle.NodeIndices[1]].Position,
+						Nodes[Triangle.NodeIndices[2]].Position, FVector(Plane), t))
+					{
+						FMHContact Contact;
+						Contact.TriangleIndices[0] = -1;
+						Contact.TriangleIndices[1] = TriangleIndex;
+						Contact.Depth = -Distance;
+						Contact.Normal = FVector(Plane);
+
+						Contact.Type = FMHContact::EType::NodeToTriangle;
+						Contact.NodeToTriangle.NodeIndex = NodeIndex;
+
+						OutContacts.Add(Contact);
+					}
 				}
 			}
 		}
@@ -609,7 +622,7 @@ void FMHPhysics::Step(float DeltaSeconds)
 
 	Contacts.Reset();
 
-	_DetectCollision(Nodes, Triangles, Contacts);
+	_DetectCollision(Nodes, Triangles, Meshes, Contacts);
 
 	{
 		SCOPE_CYCLE_COUNTER(STAT_Gravity);
@@ -1243,7 +1256,7 @@ bool FMHChunk::LoadFromFbx(const FString& Filename)
 				return Node.Name == PairName;
 			});
 
-			if (PairNode)
+			if (ensure(PairNode))
 			{
 				FMHChunkDrive Drive;
 				Drive.Name = NullNode.Name.Replace(TEXT("__DRIVE0_"), TEXT(""));
@@ -1264,7 +1277,7 @@ bool FMHChunk::LoadFromFbx(const FString& Filename)
 				return Node.Name == PairName;
 			});
 
-			if (PairNode)
+			if (ensure(PairNode))
 			{
 				FMHChunkHydraulic Hydraulic;
 				Hydraulic.Name = NullNode.Name.Replace(TEXT("__HYD0_"), TEXT(""));

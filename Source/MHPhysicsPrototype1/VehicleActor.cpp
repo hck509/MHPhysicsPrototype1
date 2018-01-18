@@ -139,7 +139,7 @@ void AVehicleActor::UpdateSteeringHydraulics()
 		{
 			const int32 HydraulicIndex = MeshComponent->GetMHMeshInfo().HydraulicIndex + i;
 
-			MHPhysics.SetHydraulicScale(HydraulicIndex, 1.0f + (Control->GetSteer() * 0.5f));
+			MHPhysics.SetHydraulicScale(HydraulicIndex, 1.0f + (Control->GetSteer() * 0.2f));
 		}
 	}
 }
