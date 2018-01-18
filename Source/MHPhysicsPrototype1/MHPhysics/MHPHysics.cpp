@@ -843,8 +843,11 @@ void FMHPhysics::Step(float DeltaSeconds)
 		const float MaxSpeedSquared = FMath::Square(MaxSpeed);
 
 		// Euler Integration
-		for (FMHNode& Node : Nodes)
+		const int32 NumNodes = Nodes.Num();
+		for (int32 NodeIndex = 0; NodeIndex < NumNodes; ++NodeIndex)
 		{
+			FMHNode& Node = Nodes[NodeIndex];
+
 			if (Node.Mass < SMALL_NUMBER)
 			{
 				continue;
@@ -858,6 +861,8 @@ void FMHPhysics::Step(float DeltaSeconds)
 			if (SpeedSquared > MaxSpeedSquared + SMALL_NUMBER)
 			{
 				Node.Velocity *= MaxSpeed * FMath::InvSqrt(SpeedSquared);
+
+				Profile.TooFastNodes.AddUnique(NodeIndex);
 			}
 		}
 	}
@@ -1022,6 +1027,11 @@ void FMHPhysics::DebugDraw(UWorld* World)
 		::DrawDebugPoint(World, Nodes[Contact.NodeToTriangle.NodeIndex].Position, 10.0f, FColor::Red, false, 0);
 		::DrawDebugDirectionalArrow(World, Nodes[Contact.NodeToTriangle.NodeIndex].Position,
 			Nodes[Contact.NodeToTriangle.NodeIndex].Position + (Contact.Normal * 50.0f), 20.0f, FColor::Red, false, -1.0f, 2, 4.0f);
+	}
+
+	for (int32 NodeIndex : Profile.TooFastNodes)
+	{
+		::DrawDebugPoint(World, Nodes[NodeIndex].Position, 15.0f, FColor::Purple, false, 0);
 	}
 }
 

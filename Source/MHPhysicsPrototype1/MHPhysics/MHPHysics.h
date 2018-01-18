@@ -278,9 +278,12 @@ struct FMHPhysicsProfile
 	void PreTick()
 	{
 		NumStepsOnLastTick = 0;
+		TooFastNodes.Reset();
 	}
 
 	int32 NumStepsOnLastTick;
+
+	TArray<int32> TooFastNodes;
 };
 
 class FMHPhysics
