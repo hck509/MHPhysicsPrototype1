@@ -78,7 +78,7 @@ private:
 	void UpdateLocationFromPhysics();
 	void UpdateDriveTorque();
 	void UpdateSteeringHydraulics();
-	void TickCameraRotation();
+	void TickCamera();
 
 	UPROPERTY()
 	USceneComponent* SceneComponent;

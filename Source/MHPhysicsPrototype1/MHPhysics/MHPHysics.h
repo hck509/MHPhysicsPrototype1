@@ -215,6 +215,8 @@ struct FMHMeshInfo
 	int32 HydraulicIndex;
 	int32 NumHydraulics;
 
+	TArray<FString> HydraulicNames;
+
 	FMHMeshInfo()
 	{
 		NodeIndex = 0;

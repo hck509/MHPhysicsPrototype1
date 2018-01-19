@@ -84,7 +84,7 @@ void AVehicleActor::Tick(float DeltaTime)
 	UpdateDriveTorque();
 	UpdateSteeringHydraulics();
 
-	TickCameraRotation();
+	TickCamera();
 }
 
 void AVehicleActor::UpdateLocationFromPhysics()
@@ -134,17 +134,29 @@ void AVehicleActor::UpdateSteeringHydraulics()
 	if (ensure(GameMode))
 	{
 		FMHPhysics& MHPhysics = GameMode->GetMHPhyscis();
+		const FMHMeshInfo& MeshInfo = MeshComponent->GetMHMeshInfo();
 
-		for (int32 i = 0; i < MeshComponent->GetMHMeshInfo().NumHydraulics; ++i)
+		for (int32 i = 0; i < MeshInfo.NumHydraulics; ++i)
 		{
-			const int32 HydraulicIndex = MeshComponent->GetMHMeshInfo().HydraulicIndex + i;
 
-			MHPhysics.SetHydraulicScale(HydraulicIndex, 1.0f + (Control->GetSteer() * 0.2f));
+			const int32 HydraulicIndex = MeshInfo.HydraulicIndex + i;
+
+			if (MeshInfo.HydraulicNames.IsValidIndex(i))
+			{
+				if (MeshInfo.HydraulicNames[i].StartsWith(TEXT("R")))
+				{
+					MHPhysics.SetHydraulicScale(HydraulicIndex, 1.0f + (Control->GetSteer() * 0.2f));
+				}
+				else if (MeshInfo.HydraulicNames[i].StartsWith(TEXT("L")))
+				{
+					MHPhysics.SetHydraulicScale(HydraulicIndex, 1.0f + (-Control->GetSteer() * 0.2f));
+				}
+			}
 		}
 	}
 }
 
-void AVehicleActor::TickCameraRotation()
+void AVehicleActor::TickCamera()
 {
 	APlayerController* PossessedPlayerController = Cast<APlayerController>(Controller);
 
@@ -152,6 +164,17 @@ void AVehicleActor::TickCameraRotation()
 	{
 		float DeltaX, DeltaY;
 		PossessedPlayerController->GetInputMouseDelta(DeltaX, DeltaY);
+
+		const float MouseWheelDelta = PossessedPlayerController->GetInputAnalogKeyState(EKeys::MouseWheelAxis);
+
+		if (MouseWheelDelta < 0)
+		{
+			CameraSpringArm->TargetArmLength *= 0.9f;
+		}
+		else if (MouseWheelDelta > 0)
+		{
+			CameraSpringArm->TargetArmLength *= 1.1f;
+		}
 
 		//CameraSpringArm->AddRelativeRotation(FRotator(0, DeltaX, 0));
 

@@ -372,6 +372,8 @@ FMHMeshInfo FMHPhysics::GenerateFromChunk(const FMHChunk& Chunk, const FTransfor
 		NewHydraulic.EdgeIndex = MatchingEdgeIndex;
 		NewHydraulic.DefaultLength = Edges[MatchingEdgeIndex].DefaultLength;
 		NewHydraulic.Length = NewHydraulic.DefaultLength;
+
+		NewMeshInfo.HydraulicNames.Add(Hydraulic.Name);
 	}
 
 	NewMeshInfo.NumNodes = Nodes.Num() - NewMeshInfo.NodeIndex;
@@ -967,7 +969,7 @@ void FMHPhysics::DebugDraw(UWorld* World)
 
 	for (const FMHNode& Node : Nodes)
 	{
-		::DrawDebugPoint(World, Node.Position, 10.0f, FColor::White, false, 0);
+		::DrawDebugPoint(World, Node.Position, 5.0f, FColor::White, false, 0);
 	}
 
 	for (const FMHEdge& Edge : Edges)
