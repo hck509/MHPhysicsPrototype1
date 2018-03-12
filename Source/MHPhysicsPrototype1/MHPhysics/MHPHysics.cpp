@@ -58,59 +58,73 @@ DECLARE_CYCLE_STAT(TEXT("MHP UpdateNodeBBox"), STAT_UpdateNodeBBox, STATGROUP_MH
 DECLARE_CYCLE_STAT(TEXT("MHP UpdateTriangleBBox"), STAT_UpdateTriangleBBox, STATGROUP_MHP);
 DECLARE_CYCLE_STAT(TEXT("MHP Draw"), STAT_Draw, STATGROUP_MHP);
 
+
+// Intersection Code from internet :)
 static bool _RayTriangleIntersect(
-	const FVector &orig, const FVector &dir,
-	const FVector &v0, const FVector &v1, const FVector &v2, const FVector& N,
-	float &t)
+	const FVector &Origin, const FVector &Dir,
+	const FVector &V0, const FVector &V1, const FVector &V2, const FVector& N,
+	float &OutDepth)
 {
-	//// compute plane's normal
-	//FVector v0v1 = v1 - v0;
-	//FVector v0v2 = v2 - v0;
-	//// no need to normalize
-	//FVector N = v0v1 ^ v0v2; // N 
-	//N.Normalize();
-	////float area2 = N.Size();
+	// check if ray and plane are parallel?
+	float NoR = N | Dir;
 
-	// Step 1: finding P
+	if (FMath::Abs(NoR) < SMALL_NUMBER)
+	{
+		// they are parallel so they don't intersect!
+		return false;
+	}
 
-	// check if ray and plane are parallel ?
-	float NdotRayDirection = N | dir;
-	if (FMath::Abs(NdotRayDirection) < SMALL_NUMBER) // almost 0 
-		return false; // they are parallel so they don't intersect ! 
+	// compute d parameter
+	float d = N | V0;
 
-	// compute d parameter using equation 2
-	float d = N | v0;
-
-	// compute t (equation 3)
-	t = (d - (N | orig)) / NdotRayDirection;
+	// compute t
+	OutDepth = (d - (N | Origin)) / NoR;
+	
 	// check if the triangle is in behind the ray
-	if (t < 0) return false; // the triangle is behind 
+	if (OutDepth < 0)
+	{
+		// the triangle is behind 
+		return false;
+	}
 
-	// compute the intersection point using equation 1
-	FVector P = orig + t * dir;
+	// compute the intersection point
+	FVector P = Origin + OutDepth * Dir;
 
 	// Step 2: inside-outside test
 	FVector C; // vector perpendicular to triangle's plane 
 
 	// edge 0
-	FVector edge0 = v1 - v0;
-	FVector vp0 = P - v0;
+	FVector edge0 = V1 - V0;
+	FVector vp0 = P - V0;
 	C = edge0 ^ vp0;
-	if ((N | C) < 0) return false; // P is on the right side 
+	if ((N | C) < 0)
+	{
+		// P is on the right side 
+		return false;
+	}
 
 	// edge 1
-	FVector edge1 = v2 - v1;
-	FVector vp1 = P - v1;
+	FVector edge1 = V2 - V1;
+	FVector vp1 = P - V1;
 	C = edge1 ^ vp1;
-	if ((N | C) < 0)  return false; // P is on the right side 
+	if ((N | C) < 0)
+	{
+		// P is on the right side 
+		return false;
+	}
 
 	// edge 2
-	FVector edge2 = v0 - v2;
-	FVector vp2 = P - v2;
+	FVector edge2 = V0 - V2;
+	FVector vp2 = P - V2;
 	C = edge2 ^ vp2;
-	if ((N | C) < 0) return false; // P is on the right side; 
+	if ((N | C) < 0)
+	{
+		// P is on the right side; 
+		return false;
+	}
 
-	return true; // this ray hits the triangle 
+	// this ray hits the triangle
+	return true; 
 }
 
 
@@ -650,12 +664,33 @@ void FMHPhysics::Step(float DeltaSeconds)
 		SCOPE_CYCLE_COUNTER(STAT_EdgeSpring);
 
 		// Apply spring force
-		for (FMHEdge& Edge : Edges)
+		const int32 NumEdges = Edges.Num();
+
+		struct FHotData
 		{
-			const FVector PositionDiff = Nodes[Edge.NodeIndices[0]].Position - Nodes[Edge.NodeIndices[1]].Position;
-			const FVector VelocityDiff = Nodes[Edge.NodeIndices[0]].Velocity - Nodes[Edge.NodeIndices[1]].Velocity;
-			const float Distance = PositionDiff.Size();
-			const FVector Normal = (Distance > SMALL_NUMBER) ? PositionDiff / Distance : FVector::ZeroVector;
+			FVector PositionDiff;
+			FVector VelocityDiff;
+		};
+		TArray<FHotData> HotData;
+		HotData.SetNum(NumEdges);
+
+		for (int32 EdgeIndex = 0; EdgeIndex < NumEdges; ++EdgeIndex)
+		{
+			const FMHEdge& Edge = Edges[EdgeIndex];
+			HotData[EdgeIndex].PositionDiff = Nodes[Edge.NodeIndices[0]].Position - Nodes[Edge.NodeIndices[1]].Position;
+			HotData[EdgeIndex].VelocityDiff = Nodes[Edge.NodeIndices[0]].Velocity - Nodes[Edge.NodeIndices[1]].Velocity;
+		}
+
+		for (int32 EdgeIndex = 0; EdgeIndex < NumEdges; ++EdgeIndex)
+		{
+			const FMHEdge& Edge = Edges[EdgeIndex];
+
+			const FVector PositionDiff = HotData[EdgeIndex].PositionDiff;
+			const FVector VelocityDiff = HotData[EdgeIndex].VelocityDiff;
+			const float InvDistance = FMath::InvSqrtEst(PositionDiff.SizeSquared());
+			//const FVector Normal = (Distance > SMALL_NUMBER) ? PositionDiff / Distance : FVector::ZeroVector;
+			const FVector Normal = PositionDiff * InvDistance;
+			const float Distance = PositionDiff | Normal;
 			const float Speed = VelocityDiff | Normal;
 
 			const FVector ForceByK = (Distance - Edge.DefaultLength) * Edge.SpringK * Normal;
